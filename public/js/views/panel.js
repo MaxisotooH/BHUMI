@@ -22,7 +22,7 @@ export default async function (ctx) {
       <div class="acciones">${botonesExportar('/api/reportes/panel', per.query)}</div></div>
     <div class="card" style="margin-bottom:16px"><div class="card-cuerpo">${barraPeriodo(per)}</div></div>
 
-    ${estado.setup?.pendientes ? html`<div class="card" style="margin-bottom:16px"><div class="card-cab"><h2>Faltan datos para calcular costos reales</h2><span class="sub">${estado.setup.pendientes} pendientes</span></div>${checklistSetup(estado.setup, { soloFaltantes: true })}</div>` : ''}
+    ${estado.setup?.pendientes ? html`<div class="card" style="margin-bottom:16px"><div class="card-cab"><h2>Faltan datos para calcular costos reales</h2><span class="sub">${estado.setup.pendientes} pendientes</span></div>${checklistSetup(estado.setup, { soloFaltantes: true, esAdmin: !estado.usuario || estado.usuario.rol === 'admin' })}</div>` : ''}
 
     <dl class="kpis" style="margin-bottom:16px">
       ${kpi('Despachos completados', num0(R.despachos), { detalle: R.entregas ? `${num0(R.entregas)} entregas · ${kmTxt(R.km)}` : 'En el período elegido', vacio: '0' })}

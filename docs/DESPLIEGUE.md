@@ -65,11 +65,11 @@ Desde ahí, el administrador crea al resto en **Configuración → Usuarios**.
 |---|---|
 | Administrador | Todo, incluidos usuarios, Google, punto de partida y respaldo. |
 | Planificador | Rutas, clientes, flota, costos, KPI, combustible, metas y personal. |
-| Operador de bodega | Despachos y entregas del día, tiempos, km y cargas de combustible. No ve costos ni planifica rutas. |
+| Operador de bodega | Despachos y entregas del día, tiempos, km y cargas de combustible. No entra al Panel, Control de costos, KPI ni Configuración, y no planifica, cancela ni elimina despachos. (Por ahora sí ve el costo estimado dentro de cada despacho.) |
 
 Los permisos se revisan en el servidor en cada solicitud. Cada escritura queda registrada (quién, qué, cuándo y desde qué IP) en **Configuración → Usuarios → Actividad reciente**.
 
-**Seguridad de las sesiones:** la sesión vence tras 12 horas sin uso y, en cualquier caso, a los 7 días. Tras 5 intentos fallidos, el inicio de sesión se bloquea 15 minutos para ese correo y para esa IP. Desactivar a un usuario o cambiarle la contraseña cierra sus sesiones de inmediato.
+**Seguridad de las sesiones:** la sesión vence tras 12 horas sin uso y, en cualquier caso, a los 7 días. Tras 5 intentos fallidos con un correo desde una misma IP, ese correo queda bloqueado 15 minutos en esa IP. Los compañeros de la misma oficina pueden seguir entrando. Si una IP acumula 50 fallos, entre todos los correos, se bloquea completa por 15 minutos. Desactivar a un usuario o cambiarle la contraseña cierra sus sesiones de inmediato.
 
 **Si un administrador olvida su contraseña**, otro administrador le asigna una nueva desde **Configuración → Usuarios**. Si no queda ninguno que pueda entrar:
 

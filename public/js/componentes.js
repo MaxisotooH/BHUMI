@@ -7,12 +7,21 @@ export function kpi(titulo, valor, { unidad = '', detalle = '', vacio = 'Sin dat
 }
 
 /** Datos que faltan para calcular costos reales (viene de /api/setup). */
-export function checklistSetup(setup, { soloFaltantes = false } = {}) {
+// Pasos que solo puede completar un administrador (en el servidor central esas pestañas son solo de Admin).
+const PASO_SOLO_ADMIN = /tab=(google|base)\b/;
+
+/** `esAdmin` en false: los pasos de Admin se muestran sin enlace, porque esa persona no puede abrirlos. */
+export function checklistSetup(setup, { soloFaltantes = false, esAdmin = true } = {}) {
   const items = soloFaltantes ? setup.items.filter((i) => i.estado === 'falta') : setup.items;
   const marca = { ok: '✓', falta: '!', opcional: '·' };
+  const accion = (i) => {
+    if (i.estado === 'ok') return html`<span class="insignia ok">Listo</span>`;
+    if (!esAdmin && PASO_SOLO_ADMIN.test(i.href ?? '')) return html`<span class="insignia">Lo completa un administrador</span>`;
+    return html`<a class="btn btn-chico" href="${i.href}">Completar</a>`;
+  };
   return html`<ul class="lista-pasos">${items.map((i) => html`<li><span class="marca-estado ${i.estado}" aria-hidden="true">${marca[i.estado]}</span>
     <div style="flex:1"><b>${i.titulo}</b>${i.estado === 'opcional' ? html` <span class="tenue">(recomendado)</span>` : ''}<div class="det">${i.detalle}</div></div>
-    ${i.estado !== 'ok' ? html`<a class="btn btn-chico" href="${i.href}">Completar</a>` : html`<span class="insignia ok">Listo</span>`}</li>`)}</ul>`;
+    ${accion(i)}</li>`)}</ul>`;
 }
 
 export const textoClientes = (n) => pluralizar(n, 'cliente', 'clientes');

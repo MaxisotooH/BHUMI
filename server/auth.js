@@ -9,7 +9,7 @@ const scrypt = promisify(crypto.scrypt);
 export const ROLES_USUARIO = [
   { id: 'admin', nombre: 'Administrador', detalle: 'Todo, incluidos usuarios, Google, punto de partida y respaldo.' },
   { id: 'planificador', nombre: 'Planificador', detalle: 'Rutas, clientes, flota, costos, KPI, combustible, metas y personal.' },
-  { id: 'bodega', nombre: 'Operador de bodega', detalle: 'Despachos y entregas del día, tiempos, km y cargas de combustible. No ve costos.' },
+  { id: 'bodega', nombre: 'Operador de bodega', detalle: 'Despachos y entregas del día, tiempos, km y cargas de combustible. No entra al Panel, Control de costos, KPI ni Configuración, y no planifica rutas.' },
 ];
 const ROL_VALIDO = new Set(ROLES_USUARIO.map((r) => r.id));
 
@@ -18,7 +18,11 @@ const COOKIE = 'bhumi_sesion';
 const INACTIVIDAD_MS = 12 * 3600_000; // la sesión vence tras 12 h sin uso…
 const MAXIMO_MS = 7 * 24 * 3600_000; // …y siempre a los 7 días
 const REFRESCO_MS = 5 * 60_000; // ultimo_uso se actualiza como mucho cada 5 min
-const INTENTOS_MAX = 5; // por correo y por IP, en la ventana:
+// Intentos fallidos permitidos en la ventana. Por correo + IP: así quien se equivoca no bloquea a sus
+// compañeros de oficina (que salen a internet con la misma IP). Por IP, un límite alto que frena a quien
+// prueba muchos correos o contraseñas sin afectar a una oficina normal.
+const INTENTOS_CUENTA = 5;
+const INTENTOS_IP = 50;
 const VENTANA_MS = 15 * 60_000;
 
 // ---------- Contraseñas (scrypt, parámetros guardados junto al hash para poder subirlos después) ----------
@@ -71,8 +75,20 @@ const BODEGA_ESCRIBE = [
   ['POST', /^\/cubicaje\/(calcular|comparar)$/],
 ];
 
+/**
+ * Ruta en la forma en que Express la compara: sin distinguir mayúsculas y sin barra final.
+ * Sin esto, "/USUARIOS" o "/auditoria/" esquivaban las reglas pero Express igual las atendía.
+ */
+export function normalizarRuta(ruta) {
+  let r = String(ruta ?? '');
+  try { r = decodeURIComponent(r); } catch { /* se revisa tal cual */ }
+  return r.toLowerCase().replace(/\/{2,}/g, '/').replace(/\/+$/, '') || '/';
+}
+
 /** ¿Puede este rol hacer `metodo` sobre `ruta` (relativa a /api)? */
 export function permitido(rol, metodo, ruta) {
+  ruta = normalizarRuta(ruta);
+  metodo = String(metodo).toUpperCase();
   if (rol === 'admin') return true;
   if (SOLO_ADMIN.some((re) => re.test(ruta))) return false;
   if (rol === 'planificador') return true;
@@ -81,6 +97,15 @@ export function permitido(rol, metodo, ruta) {
     return BODEGA_ESCRIBE.some(([m, re]) => m === metodo && re.test(ruta));
   }
   return false;
+}
+
+/** Reglas que miran el cuerpo: Bodega cierra o inicia despachos, pero no los cancela (no tiene vuelta atrás). */
+export function permitidoCuerpo(rol, metodo, ruta, cuerpo) {
+  ruta = normalizarRuta(ruta);
+  if (rol === 'bodega' && String(metodo).toUpperCase() === 'POST' && /^\/despachos\/\d+\/estado$/.test(ruta)) {
+    return ['en_ruta', 'completado'].includes(cuerpo?.estado);
+  }
+  return true;
 }
 
 // ---------- Utilidades HTTP ----------
@@ -116,11 +141,11 @@ export function crearAuth({ db, express = expressReal, ahora = () => Date.now() 
     } catch (e) { console.error('No se pudo registrar en la auditoría:', e.message); }
   };
 
-  const bloqueado = (clave) => {
+  const bloqueado = (clave, max) => {
     const r = intentos.get(clave);
     if (!r) return false;
     if (ahora() - r.desde > VENTANA_MS) { intentos.delete(clave); return false; }
-    return r.n >= INTENTOS_MAX;
+    return r.n >= max;
   };
   const fallo = (clave) => {
     const r = intentos.get(clave);
@@ -158,19 +183,20 @@ export function crearAuth({ db, express = expressReal, ahora = () => Date.now() 
     const clave = String(req.body?.clave ?? '');
     const ip = req.ip;
     if (!email || !clave) return error(res, 400, 'datos_incompletos', 'Ingresa tu correo y tu contraseña.');
-    if (bloqueado(`ip:${ip}`) || bloqueado(`email:${email}`)) {
+    const cuenta = `cuenta:${email}|${ip}`;
+    if (bloqueado(cuenta, INTENTOS_CUENTA) || bloqueado(`ip:${ip}`, INTENTOS_IP)) {
       auditar(null, 'login_bloqueado', { ip, detalle: email });
       return error(res, 429, 'demasiados_intentos', 'Demasiados intentos fallidos. Espera 15 minutos y vuelve a intentar.');
     }
     const u = db.prepare('SELECT * FROM usuarios WHERE email = ?').get(email);
     const ok = await verificarClave(clave, u?.clave_hash ?? HASH_SEÑUELO);
     if (!u || !ok || !u.activo) {
+      fallo(cuenta);
       fallo(`ip:${ip}`);
-      fallo(`email:${email}`);
       auditar(u?.id ?? null, 'login_fallido', { ip, detalle: email });
       return error(res, 401, 'credenciales', 'Correo o contraseña incorrectos.');
     }
-    intentos.delete(`email:${email}`);
+    intentos.delete(cuenta);
     const t = ahora();
     db.prepare('DELETE FROM sesiones WHERE ultimo_uso < ? OR creada_en < ?').run(t - INACTIVIDAD_MS, t - MAXIMO_MS);
     const token = crypto.randomBytes(32).toString('base64url');
@@ -194,7 +220,8 @@ export function crearAuth({ db, express = expressReal, ahora = () => Date.now() 
   const ESCRITURA = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
   function exigirSesion(req, res, next) {
-    if (RUTAS_LIBRES.has(`${req.method} ${req.path}`)) return next();
+    const ruta = normalizarRuta(req.path);
+    if (RUTAS_LIBRES.has(`${req.method} ${ruta}`)) return next();
     // Defensa adicional contra CSRF (además de SameSite=Lax): una escritura con Origin de otro sitio se rechaza.
     if (ESCRITURA.has(req.method) && req.headers.origin) {
       let host = null;
@@ -204,10 +231,14 @@ export function crearAuth({ db, express = expressReal, ahora = () => Date.now() 
     const s = sesionDe(req);
     if (!s) return error(res, 401, 'sin_sesion', 'Tu sesión terminó. Vuelve a iniciar sesión.');
     req.usuario = { id: s.id, email: s.email, nombre: s.nombre, rol: s.rol, sesion_id: s.sesion_id };
-    if (!['/auth/yo', '/auth/clave'].includes(req.path) && !permitido(s.rol, req.method, req.path)) {
+    if (!['/auth/yo', '/auth/clave'].includes(ruta) && !permitido(s.rol, req.method, ruta)) {
       return error(res, 403, 'prohibido', 'Tu rol no permite esta acción. Pídesela a un administrador.');
     }
-    if (req.method === 'PUT' && req.path === '/settings' && s.rol !== 'admin' && req.body && typeof req.body === 'object') {
+    // Reglas que dependen del contenido de la solicitud, no solo de la ruta.
+    if (!permitidoCuerpo(s.rol, req.method, ruta, req.body)) {
+      return error(res, 403, 'prohibido', 'Tu rol no permite esta acción. Pídesela a un administrador.');
+    }
+    if (req.method === 'PUT' && ruta === '/settings' && s.rol !== 'admin' && req.body && typeof req.body === 'object') {
       for (const k of AJUSTES_SOLO_ADMIN) delete req.body[k];
     }
     if (ESCRITURA.has(req.method)) {

@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { iniciar, MODO_LOCAL, CLAVE_PRUEBA } from './helpers.js';
-import { permitido, hashClave, verificarClave, AJUSTES_SOLO_ADMIN } from '../server/auth.js';
+import { permitido, permitidoCuerpo, normalizarRuta, hashClave, verificarClave, AJUSTES_SOLO_ADMIN } from '../server/auth.js';
 
 const http = { skip: MODO_LOCAL ? 'solo aplica al servidor HTTP' : false };
 
@@ -36,6 +36,27 @@ test('permisos: admin todo; planificador todo menos lo de admin; bodega solo su 
     assert.equal(permitido('bodega', m, r), false, `${m} ${r} bodega`);
   }
   assert.equal(permitido('desconocido', 'GET', '/meta'), false);
+});
+
+test('permisos: mayúsculas, barra final, barras dobles o codificación no esquivan las reglas', () => {
+  assert.equal(normalizarRuta('/USUARIOS/'), '/usuarios');
+  assert.equal(normalizarRuta('//Respaldo.json'), '/respaldo.json');
+  assert.equal(normalizarRuta('/usuari%6Fs'), '/usuarios');
+  assert.equal(normalizarRuta('/%E0%A4%A'), '/%e0%a4%a'); // codificación inválida: se revisa tal cual, sin fallar
+  for (const r of ['/USUARIOS', '/Usuarios/', '/usuarios/3/', '/auditoria/', '/AUDITORIA', '/Respaldo.json', '/respaldo.DB', '/settings/PROBAR-GOOGLE/', '/usuari%6Fs']) {
+    assert.equal(permitido('planificador', 'GET', r), false, r);
+    assert.equal(permitido('planificador', 'post', r), false, r);
+  }
+  assert.equal(permitido('bodega', 'get', '/Despachos/'), true);
+});
+
+test('permisos: bodega inicia y cierra despachos, pero no los cancela', () => {
+  assert.equal(permitidoCuerpo('bodega', 'POST', '/despachos/4/estado', { estado: 'completado' }), true);
+  assert.equal(permitidoCuerpo('bodega', 'POST', '/despachos/4/estado', { estado: 'en_ruta' }), true);
+  assert.equal(permitidoCuerpo('bodega', 'POST', '/despachos/4/estado', { estado: 'cancelado' }), false);
+  assert.equal(permitidoCuerpo('bodega', 'POST', '/Despachos/4/Estado/', { estado: 'cancelado' }), false);
+  assert.equal(permitidoCuerpo('bodega', 'POST', '/despachos/4/estado', {}), false);
+  assert.equal(permitidoCuerpo('planificador', 'POST', '/despachos/4/estado', { estado: 'cancelado' }), true);
 });
 
 // ---------- Servidor ----------
@@ -82,14 +103,59 @@ test('login: cookie segura, mismo mensaje para correo o clave incorrectos, y cie
   } finally { s.cerrar(); }
 });
 
-test('login: tras 5 intentos fallidos se bloquea 15 minutos, aunque luego la clave sea correcta', http, async () => {
+test('login: 5 fallos bloquean ese correo en esa IP, sin bloquear a los compañeros de la misma oficina', http, async () => {
   const s = await iniciar({ sinSesion: true });
   try {
     await s.comoRol('bodega', 'pedro@empresa.cl');
+    await s.comoRol('planificador', 'ana@empresa.cl');
     for (let i = 0; i < 5; i++) assert.equal((await s.entrar('pedro@empresa.cl', 'clave-equivocada-1')).login.status, 401);
     const r = await s.entrar('pedro@empresa.cl', CLAVE_PRUEBA);
     assert.equal(r.login.status, 429);
     assert.equal(r.login.data.error.code, 'demasiados_intentos');
+    // Ana sale a internet por la misma IP (todas las pruebas usan 127.0.0.1) y entra sin problema.
+    assert.equal((await s.entrar('ana@empresa.cl', CLAVE_PRUEBA)).login.status, 200);
+  } finally { s.cerrar(); }
+});
+
+test('login: 50 fallos desde una IP (con cualquier correo) bloquean esa IP', http, async () => {
+  const s = await iniciar({ sinSesion: true });
+  try {
+    await s.comoRol('planificador', 'ana@empresa.cl');
+    await Promise.all(Array.from({ length: 50 }, (_, i) => s.entrar(`prueba${i}@empresa.cl`, 'clave-equivocada-1')));
+    assert.equal((await s.entrar('ana@empresa.cl', CLAVE_PRUEBA)).login.status, 429);
+  } finally { s.cerrar(); }
+});
+
+test('permisos en el servidor: las variantes de ruta del Planificador también reciben 403', http, async () => {
+  const s = await iniciar();
+  try {
+    const p = await s.comoRol('planificador');
+    for (const r of ['/USUARIOS', '/Usuarios/', '/auditoria/', '/AUDITORIA', '/Respaldo.json', '/respaldo.json/', '/usuari%6Fs', '//usuarios']) {
+      const x = await p.call('GET', r);
+      assert.ok(x.status === 403 || x.status === 404, `${r}: ${x.status}`);
+    }
+    const crear = await p.call('POST', '/Usuarios', { email: 'intruso@empresa.cl', nombre: 'Intruso', rol: 'admin', clave: CLAVE_PRUEBA });
+    assert.equal(crear.status, 403);
+    assert.equal(s.db.prepare("SELECT COUNT(*) AS n FROM usuarios WHERE email = 'intruso@empresa.cl'").get().n, 0);
+    assert.equal((await p.call('POST', '/Settings/Probar-Google/')).status, 403);
+
+    const antes = (await s.call('GET', '/settings')).data;
+    assert.equal((await p.call('PUT', '/SETTINGS', { google_api_key: 'CLAVE_INTRUSA', deposito_direccion: 'Otra 1', costo_hora_conductor: 4700 })).status, 200);
+    const despues = (await s.call('GET', '/settings')).data;
+    assert.equal(despues.google_api_key, antes.google_api_key);
+    assert.equal(despues.deposito_direccion, antes.deposito_direccion);
+    assert.equal(despues.costo_hora_conductor, '4700');
+  } finally { s.cerrar(); }
+});
+
+test('bodega: puede cerrar un despacho pero no cancelarlo', http, async () => {
+  const s = await iniciar();
+  try {
+    const b = await s.comoRol('bodega');
+    const cancelar = await b.call('POST', '/despachos/999/estado', { estado: 'cancelado' });
+    assert.equal(cancelar.status, 403);
+    // Cerrar está permitido: llega al endpoint, que responde que ese despacho no existe.
+    assert.equal((await b.call('POST', '/despachos/999/estado', { estado: 'completado' })).status, 404);
   } finally { s.cerrar(); }
 });
 
