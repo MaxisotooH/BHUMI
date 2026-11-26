@@ -225,7 +225,7 @@ async function personal(panel, ctx) {
     acciones: [{ texto: 'Cancelar', cerrar: true }, { texto: 'Guardar', clase: 'btn-primario', accion: async (m) => {
       const d = m.datos();
       if (!d.nombre?.trim()) throw new Error('Ingresa el nombre.');
-      f ? await put(`/personal/${f.id}`, d) : await post('/personal', d);
+      f ? await put(`/personal/${f.id}`, { ...d, version: f.version }) : await post('/personal', d);
       m.cerrar(); toast('Guardado'); await ctx.refrescarEstado(); recargar();
     } }],
   });

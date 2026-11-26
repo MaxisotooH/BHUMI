@@ -101,7 +101,7 @@ export async function pintarEntregas(ctx, root) {
         if (!lineas.length) throw new Error('Agrega al menos un producto con su cantidad.');
         const d = mm.datos();
         const body = { client_id: cliente.id, fecha: d.fecha, ventana_desde: d.ventana_desde, ventana_hasta: d.ventana_hasta, direccion_entrega: d.direccion_entrega, observaciones: d.observaciones, items: lineas };
-        e ? await put(`/entregas/${e.id}`, body) : await post('/entregas', body);
+        e ? await put(`/entregas/${e.id}`, { ...body, version: e.version }) : await post('/entregas', body);
         mm.cerrar(); toast(e ? 'Entrega actualizada' : 'Entrega registrada'); cargarEntregas();
       } }],
     });
@@ -132,7 +132,7 @@ export async function pintarEntregas(ctx, root) {
   function reprogramar(e) {
     modal({ titulo: `Reprogramar entrega · ${e.cliente}`, ancho: 480,
       cuerpo: html`<form class="apilar">${campo('fecha', 'Nueva fecha', mañana(), { type: 'date', required: true })}${campo('motivo', 'Motivo', '', { placeholder: 'Ej.: cliente cerrado, falta de stock' })}</form>`,
-      acciones: [{ texto: 'Cancelar', cerrar: true }, { texto: 'Reprogramar', clase: 'btn-primario', accion: async (m) => { const d = m.datos(); if (!d.fecha) throw new Error('Indica la nueva fecha.'); await post(`/entregas/${e.id}/estado`, { estado: 'reprogramada', fecha: d.fecha, motivo: d.motivo }); m.cerrar(); toast('Entrega reprogramada'); cargarEntregas(); } }] });
+      acciones: [{ texto: 'Cancelar', cerrar: true }, { texto: 'Reprogramar', clase: 'btn-primario', accion: async (m) => { const d = m.datos(); if (!d.fecha) throw new Error('Indica la nueva fecha.'); await post(`/entregas/${e.id}/estado`, { estado: 'reprogramada', fecha: d.fecha, motivo: d.motivo, version: e.version }); m.cerrar(); toast('Entrega reprogramada'); cargarEntregas(); } }] });
   }
 
   // ---------- Eventos ----------
@@ -158,7 +158,7 @@ export async function pintarEntregas(ctx, root) {
   alHacer(root, 'click', '[data-hecha]', async (ev, b) => {
     const e = entregas.find((x) => x.id === Number(b.dataset.hecha));
     if (!await confirmar({ titulo: 'Marcar como realizada', mensaje: `¿La entrega a ${e.cliente} ya se realizó? Si fue parte de un despacho, ciérralo desde Despachos para que se sume su costo.`, textoOk: 'Marcar realizada' })) return;
-    await post(`/entregas/${e.id}/estado`, { estado: 'realizada', fecha: hoy() }).then(() => { toast('Entrega realizada'); cargarEntregas(); }).catch(falla);
+    await post(`/entregas/${e.id}/estado`, { estado: 'realizada', fecha: hoy(), version: e.version }).then(() => { toast('Entrega realizada'); cargarEntregas(); }).catch(falla);
   });
   alHacer(root, 'click', '[data-reabrir]', (ev, b) => post(`/entregas/${b.dataset.reabrir}/estado`, { estado: 'pendiente' }).then(() => cargarEntregas()).catch(falla));
   alHacer(root, 'click', '[data-borrar]', async (ev, b) => {

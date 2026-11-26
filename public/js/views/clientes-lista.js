@@ -76,7 +76,7 @@ export async function pintarClientes(ctx, cont) {
         accion: async (mm) => {
           const d = mm.datos();
           const body = { ...d, geolocalizar: !d.lat && !!d.direccion };
-          const r = c ? await put(`/clientes/${c.id}`, body) : await post('/clientes', body);
+          const r = c ? await put(`/clientes/${c.id}`, { ...body, version: c.version }) : await post('/clientes', body);
           mm.cerrar();
           toast(r.aviso ?? (c ? 'Cliente actualizado' : 'Cliente creado'), r.aviso ? 'aviso' : 'ok');
           cargar();

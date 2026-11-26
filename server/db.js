@@ -359,6 +359,42 @@ const COLUMNAS_NUEVAS = {
   // Resultado de cada parada al cerrar el despacho: 'entregada' o 'no_entregada'
   trip_stops: { resultado: 'TEXT', motivo_no_entrega: 'TEXT' },
 };
+
+/**
+ * Tablas que se editan desde formularios. Cada una lleva un número de `version` que sube con cada cambio,
+ * así el servidor detecta cuando dos personas editan el mismo registro a la vez (ver server/concurrencia.js).
+ */
+export const TABLAS_CON_VERSION = ['vehicles', 'clients', 'deliveries', 'trips', 'gastos', 'products', 'drivers'];
+for (const t of TABLAS_CON_VERSION) {
+  COLUMNAS_NUEVAS[t] ??= {};
+  COLUMNAS_NUEVAS[t].version = 'INTEGER NOT NULL DEFAULT 1';
+  // Cuándo subió la versión (UTC, con milisegundos): permite saber qué escritura de la auditoría la cambió.
+  COLUMNAS_NUEVAS[t].version_cambio = 'TEXT';
+}
+
+const AHORA_MS = "strftime('%Y-%m-%d %H:%M:%f', 'now')";
+// La versión la suben estos triggers, no el código: así cualquier UPDATE cuenta, venga de donde venga.
+// SQLite no vuelve a disparar un trigger desde sí mismo, y la condición WHEN deja pasar sin contar
+// los UPDATE que ya fijan la versión a mano (la restauración de un respaldo).
+// Se recrean en cada arranque para que una base existente reciba siempre la definición vigente.
+const TRIGGERS_VERSION = [
+  ...TABLAS_CON_VERSION.flatMap((t) => [
+    `DROP TRIGGER IF EXISTS trg_version_${t};`,
+    `CREATE TRIGGER trg_version_${t} AFTER UPDATE ON ${t}
+      WHEN NEW.version = OLD.version AND NEW.version_cambio IS OLD.version_cambio
+      BEGIN UPDATE ${t} SET version = OLD.version + 1, version_cambio = ${AHORA_MS} WHERE id = NEW.id; END;`,
+  ]),
+  // Las paradas son parte del despacho: cambiarlas también es cambiar el despacho. Los tiempos (trip_events) no:
+  // se anotan evento por evento mientras el despacho está abierto, y contarlos daría conflictos falsos al cerrarlo.
+  ...[['ins', 'INSERT', 'NEW'], ['upd', 'UPDATE', 'NEW'], ['del', 'DELETE', 'OLD']].flatMap(([s, evento, fila]) => [
+    `DROP TRIGGER IF EXISTS trg_version_trip_stops_${s};`,
+    `CREATE TRIGGER trg_version_trip_stops_${s} AFTER ${evento} ON trip_stops
+      BEGIN UPDATE trips SET version = version + 1, version_cambio = ${AHORA_MS} WHERE id = ${fila}.trip_id; END;`,
+    // Versión preliminar que también contaba los tiempos: se quita si quedó en alguna base de prueba.
+    `DROP TRIGGER IF EXISTS trg_version_trip_events_${s};`,
+  ]),
+].join('\n');
+
 function migrar(db) {
   let faltabaResultado = false;
   for (const [tabla, columnas] of Object.entries(COLUMNAS_NUEVAS)) {
@@ -369,6 +405,7 @@ function migrar(db) {
       if (tabla === 'trip_stops' && col === 'resultado') faltabaResultado = true;
     }
   }
+  db.exec(TRIGGERS_VERSION);
   // Despachos cerrados antes de existir el resultado por parada: se deduce de la entrega solo cuando es inequívoco
   if (faltabaResultado) {
     db.exec(`UPDATE trip_stops SET resultado = 'entregada' WHERE EXISTS (

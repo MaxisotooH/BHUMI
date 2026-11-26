@@ -143,10 +143,10 @@ async function detalle(ctx, root, id) {
   });
   alHacer(root, 'click', '[data-pdf]', () => descargar(`/api/reportes/despacho/${t.id}.pdf`));
 
-  alHacer(root, 'click', '[data-estado]', async (e, b) => { await post(`/despachos/${t.id}/estado`, { estado: b.dataset.estado }).then(() => { toast('Despacho en ruta'); recargar(); }).catch(falla); });
+  alHacer(root, 'click', '[data-estado]', async (e, b) => { await post(`/despachos/${t.id}/estado`, { estado: b.dataset.estado, version: t.version }).then(() => { toast('Despacho en ruta'); recargar(); }).catch(falla); });
   alHacer(root, 'click', '[data-cancelar]', async () => {
     if (!await confirmar({ titulo: 'Cancelar despacho', mensaje: 'Las entregas vuelven a quedar pendientes y el despacho queda como cancelado.', textoOk: 'Cancelar despacho', peligro: true })) return;
-    await post(`/despachos/${t.id}/estado`, { estado: 'cancelado' }).then(() => { toast('Despacho cancelado', 'aviso'); recargar(); }).catch(falla);
+    await post(`/despachos/${t.id}/estado`, { estado: 'cancelado', version: t.version }).then(() => { toast('Despacho cancelado', 'aviso'); recargar(); }).catch(falla);
   });
   alHacer(root, 'click', '[data-borrar]', async () => {
     if (!await confirmar({ titulo: 'Eliminar despacho', mensaje: 'Se borra el despacho y sus entregas vuelven a quedar pendientes. Esta acción no se puede deshacer.', textoOk: 'Eliminar', peligro: true })) return;
@@ -159,7 +159,7 @@ async function detalle(ctx, root, id) {
         ${campo('driver_id', 'Conductor', null, { options: opciones(de('conductor'), t.driver_id ?? '', { vacio: 'Sin asignar', valor: (p) => p.id, texto: (p) => p.nombre }) })}
         ${campo('preparador_id', 'Prepara el pedido (bodega)', null, { options: opciones(de('preparador'), t.preparador_id ?? '', { vacio: 'Sin asignar', valor: (p) => p.id, texto: (p) => p.nombre }) })}</form>
         ${de('preparador').length ? '' : html`<p class="muted" style="font-size:13px">Aún no hay personal de bodega. Agrégalo en Configuración → Personal.</p>`}`,
-      acciones: [{ texto: 'Cancelar', cerrar: true }, { texto: 'Guardar', clase: 'btn-primario', accion: async (m) => { await put(`/despachos/${t.id}/personal`, m.datos()); m.cerrar(); toast('Personal actualizado'); recargar(); } }] });
+      acciones: [{ texto: 'Cancelar', cerrar: true }, { texto: 'Guardar', clase: 'btn-primario', accion: async (m) => { await put(`/despachos/${t.id}/personal`, { ...m.datos(), version: t.version }); m.cerrar(); toast('Personal actualizado'); recargar(); } }] });
   });
   alHacer(root, 'click', '[data-gastos]', () => modal({ titulo: 'Gastos reales del despacho', ancho: 480,
     cuerpo: html`<p class="muted">Registra lo que realmente se gastó. Reemplaza lo anterior y actualiza el costo total.</p><form class="form-grid">${campo('peajes', 'Peajes', t.peajes ?? 0, { type: 'number', prefix: '$', min: 0 })}${campo('estacionamientos', 'Estacionamientos', t.estacionamientos ?? 0, { type: 'number', prefix: '$', min: 0 })}${campo('otros_gastos', 'Otros gastos', t.otros_gastos ?? 0, { type: 'number', prefix: '$', min: 0 })}</form>`,
@@ -180,7 +180,7 @@ async function detalle(ctx, root, id) {
         const no = filas.filter((tr) => tr.querySelector('[data-res]').value === 'no_entregada');
         const motivos = Object.fromEntries(no.map((tr) => [tr.dataset.entrega, tr.querySelector('[data-mot]').value.trim()]));
         const d = mm.datos();
-        await post(`/despachos/${t.id}/estado`, { estado: 'completado', no_entregadas: no.map((tr) => Number(tr.dataset.entrega)), motivos, nueva_fecha: d.nueva_fecha });
+        await post(`/despachos/${t.id}/estado`, { version: t.version, estado: 'completado', no_entregadas: no.map((tr) => Number(tr.dataset.entrega)), motivos, nueva_fecha: d.nueva_fecha });
         mm.cerrar(); toast('Despacho cerrado'); recargar();
       } }] });
     m.el.addEventListener('change', (e) => {

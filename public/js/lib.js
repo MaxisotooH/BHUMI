@@ -46,10 +46,13 @@ export const pluralizar = (n, uno, varios) => `${num0(n)} ${n === 1 ? uno : vari
 export const nombreVehiculo = (v) => v.nombre ? `${v.nombre} · ${v.marca} ${v.modelo}` : `${v.marca} ${v.modelo}`;
 
 // ---------- API ----------
+/** Identifica esta pestaña ante el servidor: así los avisos en tiempo real de sus propios cambios no la refrescan. */
+export const PESTANA = (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`).replace(/[^\w-]/g, '').slice(0, 40);
+
 export async function api(method, url, body) {
   let res;
   try {
-    res = await fetch(`/api${url}`, { method, headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined });
+    res = await fetch(`/api${url}`, { method, headers: { 'X-Bhumi-Pestana': PESTANA, ...(body ? { 'Content-Type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined });
   } catch {
     const e = new Error('BHUMI no pudo atender la solicitud. Recarga la página; si sigue igual, restaura tu último respaldo desde Configuración → Respaldo.');
     e.code = 'sin_servidor';
@@ -64,6 +67,8 @@ export async function api(method, url, body) {
     e.status = res.status;
     // Servidor central: la sesión venció o se cerró desde otro lado. La aplicación muestra el inicio de sesión.
     if (res.status === 401 && e.code === 'sin_sesion') window.dispatchEvent(new CustomEvent('bhumi:sin-sesion', { detail: e.message }));
+    // Otra persona guardó este registro mientras estaba abierto: la aplicación vuelve a cargar la pantalla con sus cambios.
+    if (res.status === 409 && e.code === 'conflicto') window.dispatchEvent(new CustomEvent('bhumi:conflicto', { detail: e.extra }));
     throw e;
   }
   return data;

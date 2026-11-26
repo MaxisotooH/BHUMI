@@ -55,7 +55,7 @@ function formularioProducto({ p = null, alGuardar }) {
         const d = m.datos();
         d.apilable = d.apilable ? 1 : 0;
         d.rotable = d.rotable ? 1 : 0;
-        p ? await put(`/productos/${p.id}`, d) : await post('/productos', d);
+        p ? await put(`/productos/${p.id}`, { ...d, version: p.version }) : await post('/productos', d);
         m.cerrar(); toast('Producto guardado'); await alGuardar();
       } },
     ],

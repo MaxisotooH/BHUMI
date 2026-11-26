@@ -1,5 +1,5 @@
 // Respaldo y restauración de datos (JSON). Funciona igual con node:sqlite y con SQLite en el navegador.
-import { tx } from '../db.js';
+import { tx, TABLAS_CON_VERSION } from '../db.js';
 
 /** Tablas con datos del usuario, en orden de dependencia (primero las que no apuntan a otras). */
 export const TABLAS_RESPALDO = ['settings', 'fuel_prices', 'vehicles', 'fuel_logs', 'drivers', 'clients', 'products', 'trips', 'deliveries', 'delivery_items', 'trip_stops', 'trip_events', 'gastos', 'km_semanal', 'sectores', 'incidentes'];
@@ -58,6 +58,16 @@ export function restaurarJson(db, datos) {
         n++;
       }
       resumen[t] = n;
+    }
+    // Insertar las paradas sube la versión de su despacho (trigger): se deja la que traía el respaldo.
+    // Al fijar version y version_cambio juntos, el trigger no lo cuenta como otro cambio.
+    for (const t of TABLAS_CON_VERSION) {
+      const fijar = db.prepare(`UPDATE ${t} SET version = ?, version_cambio = ? WHERE id = ? AND (version <> ? OR version_cambio IS NOT ?)`);
+      for (const fila of Array.isArray(datos[t]) ? datos[t] : []) {
+        if (!Number.isInteger(fila?.version) || fila.id == null) continue;
+        const cambio = fila.version_cambio ?? null;
+        fijar.run(fila.version, cambio, fila.id, fila.version, cambio);
+      }
     }
   });
   return resumen;

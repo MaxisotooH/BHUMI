@@ -39,7 +39,7 @@ export function formularioVehiculo({ meta, v = null, alGuardar }) {
         const f = mm.el.querySelector('#fv');
         if (!f.reportValidity()) return;
         const datos = mm.datos();
-        v ? await put(`/vehiculos/${v.id}`, datos) : await post('/vehiculos', datos);
+        v ? await put(`/vehiculos/${v.id}`, { ...datos, version: v.version }) : await post('/vehiculos', datos);
         mm.cerrar(); toast('Vehículo guardado'); await alGuardar();
       } },
     ],

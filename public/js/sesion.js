@@ -60,9 +60,10 @@ export function mostrarLogin(mensaje = '') {
   });
 }
 
-/** Ficha del usuario en la barra superior; al hacer clic abre su menú. */
-export function fichaUsuario(usuario) {
-  return html`<button type="button" class="dato-chip ficha-usuario" data-menu-usuario title="${usuario.email}">
+/** Ficha del usuario en la barra superior; al hacer clic abre su menú. El punto verde indica conexión en vivo. */
+export function fichaUsuario(usuario, enVivo = false) {
+  const estadoTxt = enVivo ? 'Conectado en vivo: verás al instante los cambios de los demás.' : 'Reconectando: los cambios de los demás aparecerán al volver la conexión.';
+  return html`<button type="button" class="dato-chip ficha-usuario ${enVivo ? 'en-vivo' : ''}" data-menu-usuario title="${usuario.email} · ${estadoTxt}">
     <span class="avatar" aria-hidden="true">${(usuario.nombre.trim()[0] ?? '?').toUpperCase()}</span>
     <span>${usuario.nombre.split(' ')[0]} <b>${NOMBRE_ROL[usuario.rol] ?? usuario.rol}</b></span></button>`;
 }
