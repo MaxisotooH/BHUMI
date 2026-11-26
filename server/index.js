@@ -9,6 +9,8 @@ import { createPlanner } from './services/planner.js';
 import { createApi } from './api.js';
 import { leerConfig, ErrorConfig } from './config.js';
 import { crearAuth } from './auth.js';
+import { crearEventos } from './eventos.js';
+import { crearControlVersiones } from './concurrencia.js';
 
 const raiz = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const VERSION = JSON.parse(fs.readFileSync(path.join(raiz, 'package.json'), 'utf8')).version;
@@ -23,7 +25,7 @@ if (major < 22 || (major === 22 && minor < 13)) {
  * @param clavesGoogle  { servidor, navegador } cuando las claves vienen de variables de entorno (servidor central).
  *                      Sin ellas, se usa la clave guardada en Configuración, como en la versión de un solo equipo.
  */
-export function crearApp({ dbFile = path.join(raiz, 'data', 'bhumi.db'), fetchImpl, demo = false, clavesGoogle = null, trustProxy = false } = {}) {
+export function crearApp({ dbFile = path.join(raiz, 'data', 'bhumi.db'), fetchImpl, demo = false, clavesGoogle = null, trustProxy = false, pingEventosMs } = {}) {
   const db = openDb(dbFile);
   const google = createGoogle({ getKey: () => clavesGoogle?.servidor ?? getSettings(db).google_api_key, fetchImpl });
   const planner = createPlanner({ db, google });
@@ -46,6 +48,12 @@ export function crearApp({ dbFile = path.join(raiz, 'data', 'bhumi.db'), fetchIm
   const auth = crearAuth({ db });
   app.use('/api', auth.publico);
   app.use('/api', auth.exigirSesion);
+  // Tiempo real: cada escritura exitosa se anuncia por GET /api/eventos (con quién la hizo)…
+  const eventos = crearEventos({ sesionDe: auth.sesionDe, pingMs: pingEventosMs });
+  app.get('/api/eventos', eventos.canal);
+  app.use('/api', eventos.anunciar);
+  // …y si dos personas editan el mismo registro, la segunda recibe un aviso de conflicto (409).
+  app.use('/api', crearControlVersiones({ db }));
   app.use('/api', auth.privado);
   app.use('/api', createApi({ db, google, planner, demo, clavesGoogle, autenticacion: true }));
 
@@ -55,7 +63,7 @@ export function crearApp({ dbFile = path.join(raiz, 'data', 'bhumi.db'), fetchIm
   app.use('/vendor/fonts/barlow-condensed', express.static(path.join(raiz, 'node_modules', '@fontsource', 'barlow-condensed', 'files')));
   app.use(express.static(pub));
   app.get('*', (req, res) => res.sendFile(path.join(pub, 'index.html')));
-  return { app, db, google, planner };
+  return { app, db, google, planner, eventos };
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
@@ -68,7 +76,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     process.exit(1);
   }
   for (const a of config.advertencias) console.warn(`ADVERTENCIA: ${a}`);
-  const { app, db } = crearApp({ dbFile: config.dbFile, clavesGoogle: config.clavesGoogle, trustProxy: config.trustProxy });
+  const { app, db, eventos } = crearApp({ dbFile: config.dbFile, clavesGoogle: config.clavesGoogle, trustProxy: config.trustProxy });
   if (db.prepare('SELECT COUNT(*) AS n FROM usuarios').get().n === 0) {
     console.warn('AVISO: todavía no hay usuarios. Crea el primer administrador con:  npm run crear-admin  (en Docker: docker compose exec app npm run crear-admin)');
   }
@@ -85,6 +93,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     if (cerrando) return;
     cerrando = true;
     console.log(`Recibido ${senal}: cerrando BHUMI…`);
+    eventos.cerrarTodo(); // las conexiones de tiempo real no terminan solas y retendrían el cierre
     servidor.close(() => {
       try { db.close(); } catch { /* ya cerrada */ }
       process.exit(0);

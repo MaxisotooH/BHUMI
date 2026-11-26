@@ -38,7 +38,7 @@ export async function iniciar({ fake = crearFakeGoogle(), demo = false, sinSesio
     const call = async (method, ruta, body) => { const r = await client.request(method, `/api${ruta}`, body); return respuesta(r.status, r.headers, r.body); };
     return { call, subir: (ruta, bytes) => call('POST', ruta, new Uint8Array(bytes)), fake, db, cerrar: () => {} };
   }
-  const { app, db } = crearApp({ dbFile: ':memory:', fetchImpl: fake.fetchImpl, demo, ...opcionesApp });
+  const { app, db, eventos } = crearApp({ dbFile: ':memory:', fetchImpl: fake.fetchImpl, demo, ...opcionesApp });
   const server = await new Promise((ok) => { const s = app.listen(0, '127.0.0.1', () => ok(s)); });
   const base = `http://127.0.0.1:${server.address().port}/api`;
   // El servidor central exige sesión: las pruebas actúan como un administrador (o sin sesión, con `sinSesion`).
@@ -53,6 +53,8 @@ export async function iniciar({ fake = crearFakeGoogle(), demo = false, sinSesio
       const res = await fetch(base + ruta, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream', ...(cookie ? { Cookie: cookie } : {}) }, body: bytes });
       return { status: res.status, data: await res.json() };
     },
+    /** Abre el canal de tiempo real (GET /eventos) como lo haría el navegador. */
+    eventos: () => abrirEventos(`${base}/eventos`, cookie),
   });
   /** Inicia sesión y devuelve un cliente con esa cookie (o la respuesta del login si falló). */
   const entrar = async (email, clave) => {
@@ -66,6 +68,69 @@ export async function iniciar({ fake = crearFakeGoogle(), demo = false, sinSesio
     return entrar(email, clave);
   };
   const admin = sinSesion ? cliente(null) : await comoRol('admin');
-  return { call: admin.call, subir: admin.subir, fake, db, base, entrar, comoRol, sinSesion: cliente(null), cerrar: () => server.close() };
+  return {
+    call: admin.call, subir: admin.subir, eventos: admin.eventos, fake, db, base, entrar, comoRol, sinSesion: cliente(null), canal: eventos,
+    cerrar: () => { eventos.cerrarTodo(); server.closeAllConnections(); server.close(); },
+  };
 }
 export const CLAVE_PRUEBA = 'clave-de-prueba-123';
+
+/**
+ * Cliente mínimo de Server-Sent Events sobre fetch. Junta los eventos recibidos en `lista` (con su `tipo`)
+ * y permite esperar uno que cumpla una condición.
+ */
+async function abrirEventos(url, cookie) {
+  const ctrl = new AbortController();
+  const res = await fetch(url, { headers: cookie ? { Cookie: cookie } : {}, signal: ctrl.signal });
+  const lista = [];
+  const esperas = [];
+  let terminado = false;
+  if (res.ok) {
+    (async () => {
+      const lector = res.body.getReader();
+      const dec = new TextDecoder();
+      let buf = '';
+      try {
+        for (;;) {
+          const { value, done } = await lector.read();
+          if (done) break;
+          buf += dec.decode(value, { stream: true });
+          let i;
+          while ((i = buf.indexOf('\n\n')) >= 0) {
+            const bloque = buf.slice(0, i);
+            buf = buf.slice(i + 2);
+            let tipo = 'message';
+            const datos = [];
+            for (const linea of bloque.split('\n')) {
+              if (linea.startsWith('event: ')) tipo = linea.slice(7);
+              else if (linea.startsWith('data: ')) datos.push(linea.slice(6));
+            }
+            if (!datos.length) continue; // comentarios (ping) y "retry"
+            lista.push({ tipo, ...JSON.parse(datos.join('\n')) });
+            for (const w of [...esperas]) if (w.cond(lista.at(-1))) { esperas.splice(esperas.indexOf(w), 1); w.ok(lista.at(-1)); }
+          }
+        }
+      } catch { /* cancelado */ }
+      terminado = true;
+      for (const w of esperas.splice(0)) w.ok(null);
+    })();
+  } else {
+    await res.body?.cancel();
+  }
+  return {
+    status: res.status,
+    lista,
+    get terminado() { return terminado; },
+    /** El primer evento (ya recibido o futuro) que cumpla `cond`, o null si no llega en `ms`. */
+    esperar(cond, ms = 2000) {
+      const ya = lista.find(cond);
+      if (ya) return Promise.resolve(ya);
+      return new Promise((ok) => {
+        const w = { cond, ok: (x) => { clearTimeout(t); ok(x); } };
+        const t = setTimeout(() => { esperas.splice(esperas.indexOf(w), 1); ok(null); }, ms);
+        esperas.push(w);
+      });
+    },
+    cerrar: () => ctrl.abort(),
+  };
+}

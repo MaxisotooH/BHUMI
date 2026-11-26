@@ -359,6 +359,30 @@ const COLUMNAS_NUEVAS = {
   // Resultado de cada parada al cerrar el despacho: 'entregada' o 'no_entregada'
   trip_stops: { resultado: 'TEXT', motivo_no_entrega: 'TEXT' },
 };
+
+/**
+ * Tablas que se editan desde formularios. Cada una lleva un número de `version` que sube con cada cambio,
+ * así el servidor detecta cuando dos personas editan el mismo registro a la vez (ver server/concurrencia.js).
+ */
+export const TABLAS_CON_VERSION = ['vehicles', 'clients', 'deliveries', 'trips', 'gastos', 'products', 'drivers'];
+for (const t of TABLAS_CON_VERSION) (COLUMNAS_NUEVAS[t] ??= {}).version = 'INTEGER NOT NULL DEFAULT 1';
+
+// La versión la suben estos triggers, no el código: así cualquier UPDATE cuenta, venga de donde venga.
+// (SQLite no vuelve a disparar un trigger desde sí mismo, y la condición WHEN evita contar dos veces.)
+const TRIGGERS_VERSION = [
+  ...TABLAS_CON_VERSION.map((t) => `CREATE TRIGGER IF NOT EXISTS trg_version_${t} AFTER UPDATE ON ${t}
+    WHEN NEW.version = OLD.version BEGIN UPDATE ${t} SET version = OLD.version + 1 WHERE id = NEW.id; END;`),
+  // Las paradas son parte del despacho: cambiarlas también es cambiar el despacho. Los tiempos (trip_events) no:
+  // se anotan evento por evento mientras el despacho está abierto, y contarlos daría conflictos falsos al cerrarlo.
+  ...['trip_stops'].flatMap((t) => [
+    `CREATE TRIGGER IF NOT EXISTS trg_version_${t}_ins AFTER INSERT ON ${t} BEGIN UPDATE trips SET version = version + 1 WHERE id = NEW.trip_id; END;`,
+    `CREATE TRIGGER IF NOT EXISTS trg_version_${t}_upd AFTER UPDATE ON ${t} BEGIN UPDATE trips SET version = version + 1 WHERE id = NEW.trip_id; END;`,
+    `CREATE TRIGGER IF NOT EXISTS trg_version_${t}_del AFTER DELETE ON ${t} BEGIN UPDATE trips SET version = version + 1 WHERE id = OLD.trip_id; END;`,
+  ]),
+  // Versión preliminar que también contaba los tiempos: se quita si quedó en alguna base de prueba.
+  ...['ins', 'upd', 'del'].map((s) => `DROP TRIGGER IF EXISTS trg_version_trip_events_${s};`),
+].join('\n');
+
 function migrar(db) {
   let faltabaResultado = false;
   for (const [tabla, columnas] of Object.entries(COLUMNAS_NUEVAS)) {
@@ -369,6 +393,7 @@ function migrar(db) {
       if (tabla === 'trip_stops' && col === 'resultado') faltabaResultado = true;
     }
   }
+  db.exec(TRIGGERS_VERSION);
   // Despachos cerrados antes de existir el resultado por parada: se deduce de la entrega solo cuando es inequívoco
   if (faltabaResultado) {
     db.exec(`UPDATE trip_stops SET resultado = 'entregada' WHERE EXISTS (

@@ -69,6 +69,13 @@ Desde ahí, el administrador crea al resto en **Configuración → Usuarios**.
 
 Los permisos se revisan en el servidor en cada solicitud. Cada escritura queda registrada (quién, qué, cuándo y desde qué IP) en **Configuración → Usuarios → Actividad reciente**.
 
+**Trabajo simultáneo:**
+- Cuando alguien guarda un cambio, los demás lo ven al instante en su pantalla, con un aviso de quién fue.
+- Si alguien está escribiendo o tiene un formulario abierto, no se le interrumpe: aparece una barra con el botón "Actualizar".
+- Si dos personas editan el mismo registro, la segunda en guardar recibe un aviso con el nombre de quien cambió y la pantalla vuelve a cargar con esos cambios. Nadie pisa sin querer el trabajo de otro.
+- El punto verde junto al nombre, arriba a la derecha, indica que la conexión en vivo está activa.
+- Caddy ya viene configurado para no retener estos avisos. Si se usa otro proxy (nginx, por ejemplo), hay que desactivar su búfer para `/api/eventos`.
+
 **Seguridad de las sesiones:** la sesión vence tras 12 horas sin uso y, en cualquier caso, a los 7 días. Tras 5 intentos fallidos con un correo desde una misma IP, ese correo queda bloqueado 15 minutos en esa IP. Los compañeros de la misma oficina pueden seguir entrando. Si una IP acumula 50 fallos, entre todos los correos, se bloquea completa por 15 minutos. Desactivar a un usuario o cambiarle la contraseña cierra sus sesiones de inmediato.
 
 **Si un administrador olvida su contraseña**, otro administrador le asigna una nueva desde **Configuración → Usuarios**. Si no queda ninguno que pueda entrar:

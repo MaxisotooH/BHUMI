@@ -356,3 +356,12 @@ td.der .sub-cel { text-align: right; }
 /* Ficha del usuario en la barra superior */
 .ficha-usuario { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font: inherit; }
 .ficha-usuario .avatar { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: var(--senal); color: #fff; font-weight: 700; font-size: 12px; flex: none; }
+
+/* Tiempo real (servidor central) */
+.toast.info { border-left-color: var(--ruta-a); }
+.aviso-cambios { margin: 12px 24px 0; display: flex; gap: 12px 20px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.aviso-cambios p { margin: 0; flex: 1 1 340px; }
+.aviso-cambios .fila { margin: 0; }
+.ficha-usuario .avatar { position: relative; }
+.ficha-usuario .avatar::after { content: ''; position: absolute; right: -2px; bottom: -2px; width: 9px; height: 9px; border-radius: 50%; border: 2px solid #fff; background: var(--tinta-3); }
+.ficha-usuario.en-vivo .avatar::after { background: var(--ok); }

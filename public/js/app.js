@@ -2,6 +2,7 @@
 import { html, raw, pintar, get, clp, destruirGraficos, falla, esc, descargar, alHacer } from './lib.js';
 import { activarDemo } from './maps.js';
 import { mostrarLogin, fichaUsuario, abrirMenuUsuario, veSeccion, seccionInicial } from './sesion.js';
+import { iniciarTiempoReal, quitarBarraCambios } from './tiempo-real.js';
 
 const icono = (d) => `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
 const SECCIONES = [
@@ -16,10 +17,33 @@ const SECCIONES = [
 ];
 
 // `usuario` existe solo en el servidor central (con inicio de sesión); en la versión de doble clic queda en null.
-export const estado = { settings: null, meta: null, setup: null, usuario: null };
+export const estado = { settings: null, meta: null, setup: null, usuario: null, enVivo: false };
 const seccionesVisibles = () => SECCIONES.filter((s) => veSeccion(estado.usuario, s.id));
 let limpiezaVista = null;
 let tokenNav = 0;
+let escribiendo = false; // hubo cambios sin guardar en la pantalla actual (no se refresca sola)
+
+/**
+ * ¿Refrescar ahora interrumpiría a la persona? Sí si tiene un diálogo abierto, escribió algo en la pantalla
+ * o está armando una ruta nueva (esa planificación vive solo en la pantalla hasta guardarla).
+ */
+function ocupado() {
+  if (document.getElementById('modales').children.length) return true;
+  if (escribiendo) return true;
+  const { id, params } = ruta();
+  const tabRutas = params.get('tab') ?? (params.get('trip') || estado.usuario?.rol === 'bodega' ? 'despachos' : 'nueva');
+  return id === 'rutas' && tabRutas === 'nueva' && !params.get('trip');
+}
+
+/** Vuelve a cargar la sección actual con los datos nuevos, en la misma posición de la página. */
+async function refrescarVista() {
+  const y = window.scrollY;
+  const v = document.getElementById('vista')?.scrollTop ?? 0;
+  await mostrar();
+  window.scrollTo(0, y);
+  const vista = document.getElementById('vista');
+  if (vista) vista.scrollTop = v;
+}
 
 export async function refrescarEstado() {
   const [settings, setup, precios] = await Promise.all([get('/settings'), get('/setup'), get('/combustible/precios')]);
@@ -46,7 +70,7 @@ function pintarMarco() {
     : enlace('#/configuracion?tab=combustible', 'dato-chip alerta', '', 'Falta el precio del combustible'));
   chips.push(enlace('#/configuracion?tab=base', 'dato-chip', 'Punto de partida de las rutas', html`Base <b>${s.deposito_comuna || 'sin definir'}</b>`, true));
   if (!s.google_api_key) chips.push(enlace('#/configuracion?tab=google', 'dato-chip alerta', '', 'Falta API key de Google', true));
-  if (u) chips.push(fichaUsuario(u));
+  if (u) chips.push(fichaUsuario(u, estado.enVivo));
   pintar(document.getElementById('topbar-datos'), html`${chips}`);
   const p = estado.setup?.pendientes ?? 0;
   pintar(document.getElementById('sidebar-pie'), !veSeccion(u, 'panel')
@@ -80,6 +104,11 @@ async function mostrar() {
   const vista = anterior.cloneNode(false);
   anterior.replaceWith(vista);
   vista.className = 'vista';
+  // Escribir en un formulario de la pantalla la marca como "con cambios sin guardar" (los filtros sueltos no cuentan).
+  escribiendo = false;
+  quitarBarraCambios();
+  vista.addEventListener('input', (e) => { if (e.target.closest('form')) escribiendo = true; });
+  vista.addEventListener('submit', () => { escribiendo = false; });
   vista.innerHTML = '<div class="cargando"><span class="spinner"></span> Cargando…</div>';
   if (estado.settings) pintarMarco();
   try {
@@ -133,6 +162,16 @@ async function iniciar() {
         throw e;
       }
       alHacer(document.getElementById('topbar-datos'), 'click', '[data-menu-usuario]', () => abrirMenuUsuario(estado.usuario));
+      // Otra persona guardó el registro que estaba abierto: se cierra el diálogo y la pantalla vuelve con sus cambios.
+      window.addEventListener('bhumi:conflicto', () => {
+        document.getElementById('modales').innerHTML = '';
+        escribiendo = false;
+        refrescarVista();
+      });
+      iniciarTiempoReal({
+        estado, ocupado, refrescarVista, refrescarEstado, pintarMarco, mostrarLogin,
+        seccionActual: () => ruta().id,
+      });
     }
     await refrescarEstado();
     avisoRespaldo().catch(() => {});

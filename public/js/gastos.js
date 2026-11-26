@@ -21,7 +21,7 @@ export function formularioGasto({ meta, vehiculos, gasto = null, vehicle_id = nu
       accion: async (mm) => {
         const d = mm.datos();
         const body = { ...d, vehicle_id: d.vehicle_id || null, km_odometro: d.km_odometro || null, proximo_km: d.categoria === 'mantencion_preventiva' ? d.proximo_km || null : null };
-        gasto ? await put(`/gastos/${gasto.id}`, body) : await post('/gastos', body);
+        gasto ? await put(`/gastos/${gasto.id}`, { ...body, version: gasto.version }) : await post('/gastos', body);
         mm.cerrar(); toast(gasto ? 'Gasto actualizado' : 'Gasto registrado'); alGuardar?.();
       },
     }],

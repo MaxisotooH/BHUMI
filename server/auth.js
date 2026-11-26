@@ -60,7 +60,7 @@ const SOLO_ADMIN = [/^\/usuarios(\/|$)/, /^\/auditoria$/, /^\/respaldo/, /^\/set
 export const AJUSTES_SOLO_ADMIN = ['google_api_key', 'google_map_id', 'usar_trafico', 'cache_horas', 'empresa_nombre', 'deposito_nombre', 'deposito_direccion', 'deposito_comuna', 'deposito_region', 'deposito_lat', 'deposito_lng'];
 
 const BODEGA_LEE = [
-  /^\/meta$/, /^\/settings$/, /^\/setup$/, /^\/combustible\/precios$/,
+  /^\/meta$/, /^\/settings$/, /^\/setup$/, /^\/combustible\/precios$/, /^\/eventos$/,
   /^\/vehiculos(\/\d+(\/cargas)?)?$/, /^\/flota$/, /^\/km-semanal$/, /^\/personal$/, /^\/productos$/,
   /^\/clientes(\/\d+)?$/, /^\/entregas$/, /^\/despachos(\/\d+(\/(ruta-conductor|tiempos))?)?$/,
   /^\/reportes\/despacho\/\d+\.pdf$/, /^\/cubicaje\/capacidad$/, /^\/consolidacion$/,
@@ -158,8 +158,12 @@ export function crearAuth({ db, express = expressReal, ahora = () => Date.now() 
     db.prepare('DELETE FROM sesiones WHERE usuario_id = ? AND id IS NOT ?').run(usuarioId, excepto);
   const adminsActivos = () => db.prepare("SELECT COUNT(*) AS n FROM usuarios WHERE rol = 'admin' AND activo = 1").get().n;
 
-  /** Sesión válida para la cookie de la solicitud, o null. Renueva `ultimo_uso` y borra la sesión si venció. */
-  function sesionDe(req) {
+  /**
+   * Sesión válida para la cookie de la solicitud, o null. Borra la sesión si venció.
+   * Con `renovar` (lo normal) cuenta como actividad; el canal de tiempo real revisa sin renovar,
+   * para que una pestaña abierta sin uso no mantenga la sesión viva para siempre.
+   */
+  function sesionDe(req, { renovar = true } = {}) {
     const token = leerCookie(req, COOKIE);
     if (!token) return null;
     const id = sha256(token);
@@ -171,7 +175,7 @@ export function crearAuth({ db, express = expressReal, ahora = () => Date.now() 
       db.prepare('DELETE FROM sesiones WHERE id = ?').run(id);
       return null;
     }
-    if (t - s.ultimo_uso > REFRESCO_MS) db.prepare('UPDATE sesiones SET ultimo_uso = ? WHERE id = ?').run(t, id);
+    if (renovar && t - s.ultimo_uso > REFRESCO_MS) db.prepare('UPDATE sesiones SET ultimo_uso = ? WHERE id = ?').run(t, id);
     return s;
   }
 
