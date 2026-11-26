@@ -137,7 +137,9 @@ export function crearAuth({ db, express = expressReal, ahora = () => Date.now() 
 
   const auditar = (usuarioId, accion, { ruta = null, estado = null, ip = null, detalle = null } = {}) => {
     try {
-      db.prepare('INSERT INTO auditoria (usuario_id, accion, ruta, estado, ip, detalle) VALUES (?, ?, ?, ?, ?, ?)').run(usuarioId, accion, ruta, estado, ip, detalle);
+      // Hora UTC con milisegundos: permite saber qué solicitud cambió un registro (ver server/concurrencia.js).
+      db.prepare(`INSERT INTO auditoria (ts, usuario_id, accion, ruta, estado, ip, detalle)
+        VALUES (strftime('%Y-%m-%d %H:%M:%f', 'now'), ?, ?, ?, ?, ?, ?)`).run(usuarioId, accion, ruta, estado, ip, detalle);
     } catch (e) { console.error('No se pudo registrar en la auditoría:', e.message); }
   };
 

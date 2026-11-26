@@ -60,11 +60,13 @@ export function restaurarJson(db, datos) {
       resumen[t] = n;
     }
     // Insertar las paradas sube la versión de su despacho (trigger): se deja la que traía el respaldo.
-    // El "version <> ?" evita un UPDATE sin cambio, que el mismo trigger contaría como otro cambio.
+    // Al fijar version y version_cambio juntos, el trigger no lo cuenta como otro cambio.
     for (const t of TABLAS_CON_VERSION) {
-      const fijar = db.prepare(`UPDATE ${t} SET version = ? WHERE id = ? AND version <> ?`);
+      const fijar = db.prepare(`UPDATE ${t} SET version = ?, version_cambio = ? WHERE id = ? AND (version <> ? OR version_cambio IS NOT ?)`);
       for (const fila of Array.isArray(datos[t]) ? datos[t] : []) {
-        if (Number.isInteger(fila?.version) && fila.id != null) fijar.run(fila.version, fila.id, fila.version);
+        if (!Number.isInteger(fila?.version) || fila.id == null) continue;
+        const cambio = fila.version_cambio ?? null;
+        fijar.run(fila.version, cambio, fila.id, fila.version, cambio);
       }
     }
   });

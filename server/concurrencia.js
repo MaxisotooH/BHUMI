@@ -30,11 +30,38 @@ export function registroEditado(metodo, ruta) {
   return null;
 }
 
+// La auditoría se escribe al terminar cada solicitud, así que la que cambió un registro termina después del
+// cambio: se busca la primera que terminó en los MARGEN_S segundos siguientes. La holgura hacia atrás es solo
+// para el redondeo de julianday: dos solicitudes pueden ir a pocos milisegundos una de otra.
+const MARGEN_S = 5;
+const HOLGURA_S = 0.001;
+
+/** Nombre corto de la sección de una ruta de la API, para el aviso ("al guardar en despachos"). */
+const SECCION = { despachos: 'un despacho', entregas: 'las entregas', vehiculos: 'los vehículos', cargas: 'las cargas de combustible', gastos: 'los gastos', clientes: 'los clientes', 'km-semanal': 'el kilometraje semanal', productos: 'los productos', personal: 'el personal' };
+
 export function crearControlVersiones({ db }) {
-  /** Último cambio exitoso de otra persona sobre ese registro, según la auditoría. */
-  const ultimoCambio = (base, usuarioId) => db.prepare(`SELECT a.ts, u.nombre FROM auditoria a LEFT JOIN usuarios u ON u.id = a.usuario_id
-      WHERE (a.ruta = ? OR a.ruta LIKE ?) AND a.estado < 400 AND a.accion IN ('PUT', 'POST') AND a.usuario_id IS NOT ?
-      ORDER BY a.id DESC LIMIT 1`).get(base, `${base}/%`, usuarioId);
+  /**
+   * ¿Quién subió la versión? La primera escritura de la auditoría que terminó después del cambio (`version_cambio`).
+   * Puede venir de otra sección: cerrar un despacho suma km al odómetro y cambia así el vehículo.
+   * Si dos terminaron a la vez, se prefiere la que fue sobre el mismo registro. Sin coincidencia, null: no se adivina.
+   */
+  const quienCambio = (cambio, base) => {
+    if (!cambio) return null;
+    return db.prepare(`SELECT a.ts, a.ruta, a.usuario_id, u.nombre FROM auditoria a JOIN usuarios u ON u.id = a.usuario_id
+        WHERE a.estado < 400 AND a.accion IN ('POST', 'PUT', 'PATCH', 'DELETE')
+          AND (julianday(a.ts) - julianday(?)) * 86400 BETWEEN ? AND ?
+        ORDER BY julianday(a.ts) ASC, (lower(a.ruta) = ? OR lower(a.ruta) LIKE ?) DESC, a.id ASC
+        LIMIT 1`).get(cambio, -HOLGURA_S, MARGEN_S, base, `${base}/%`) ?? null;
+  };
+
+  function mensaje(quien, base, usuarioId) {
+    const fin = 'mientras lo tenías abierto. Se volvió a cargar con sus cambios: revísalos y vuelve a guardar si hace falta.';
+    if (!quien) return `Otra persona guardó cambios en este registro ${fin}`;
+    const seccion = quien.ruta?.toLowerCase().split('/')[1];
+    const desde = seccion && seccion !== base.split('/')[1] ? ` (al guardar ${SECCION[seccion] ?? seccion})` : '';
+    if (quien.usuario_id === usuarioId) return `Tú mismo cambiaste este registro en otra pestaña o ventana${desde} ${fin}`;
+    return `${quien.nombre} cambió este registro${desde} ${fin}`;
+  }
 
   return function controlVersiones(req, res, next) {
     const body = req.body;
@@ -43,15 +70,14 @@ export function crearControlVersiones({ db }) {
     delete body.version; // los handlers no la escriben: la mantienen los triggers de la base
     const reg = registroEditado(req.method, req.path);
     if (!reg || !Number.isInteger(enviada)) return next();
-    const fila = db.prepare(`SELECT version FROM ${reg.tabla} WHERE id = ?`).get(reg.id);
+    const fila = db.prepare(`SELECT version, version_cambio FROM ${reg.tabla} WHERE id = ?`).get(reg.id);
     if (!fila || fila.version === enviada) return next(); // si no existe, el endpoint responde 404 como siempre
-    const quien = ultimoCambio(reg.base, req.usuario?.id ?? null);
-    const nombre = quien?.nombre ?? 'Otra persona';
+    const quien = quienCambio(fila.version_cambio, reg.base);
     res.status(409).json({
       error: {
         code: 'conflicto',
-        mensaje: `${nombre} guardó cambios en este registro mientras lo tenías abierto. Se volvió a cargar con sus cambios: revísalos y vuelve a guardar si hace falta.`,
-        extra: { usuario: quien?.nombre ?? null, ts: quien?.ts ?? null, version_actual: fila.version },
+        mensaje: mensaje(quien, reg.base, req.usuario?.id ?? null),
+        extra: { usuario: quien?.nombre ?? null, ruta: quien?.ruta ?? null, ts: quien?.ts ?? null, version_actual: fila.version },
       },
     });
   };

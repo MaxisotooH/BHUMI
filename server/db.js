@@ -365,22 +365,34 @@ const COLUMNAS_NUEVAS = {
  * así el servidor detecta cuando dos personas editan el mismo registro a la vez (ver server/concurrencia.js).
  */
 export const TABLAS_CON_VERSION = ['vehicles', 'clients', 'deliveries', 'trips', 'gastos', 'products', 'drivers'];
-for (const t of TABLAS_CON_VERSION) (COLUMNAS_NUEVAS[t] ??= {}).version = 'INTEGER NOT NULL DEFAULT 1';
+for (const t of TABLAS_CON_VERSION) {
+  COLUMNAS_NUEVAS[t] ??= {};
+  COLUMNAS_NUEVAS[t].version = 'INTEGER NOT NULL DEFAULT 1';
+  // Cuándo subió la versión (UTC, con milisegundos): permite saber qué escritura de la auditoría la cambió.
+  COLUMNAS_NUEVAS[t].version_cambio = 'TEXT';
+}
 
+const AHORA_MS = "strftime('%Y-%m-%d %H:%M:%f', 'now')";
 // La versión la suben estos triggers, no el código: así cualquier UPDATE cuenta, venga de donde venga.
-// (SQLite no vuelve a disparar un trigger desde sí mismo, y la condición WHEN evita contar dos veces.)
+// SQLite no vuelve a disparar un trigger desde sí mismo, y la condición WHEN deja pasar sin contar
+// los UPDATE que ya fijan la versión a mano (la restauración de un respaldo).
+// Se recrean en cada arranque para que una base existente reciba siempre la definición vigente.
 const TRIGGERS_VERSION = [
-  ...TABLAS_CON_VERSION.map((t) => `CREATE TRIGGER IF NOT EXISTS trg_version_${t} AFTER UPDATE ON ${t}
-    WHEN NEW.version = OLD.version BEGIN UPDATE ${t} SET version = OLD.version + 1 WHERE id = NEW.id; END;`),
+  ...TABLAS_CON_VERSION.flatMap((t) => [
+    `DROP TRIGGER IF EXISTS trg_version_${t};`,
+    `CREATE TRIGGER trg_version_${t} AFTER UPDATE ON ${t}
+      WHEN NEW.version = OLD.version AND NEW.version_cambio IS OLD.version_cambio
+      BEGIN UPDATE ${t} SET version = OLD.version + 1, version_cambio = ${AHORA_MS} WHERE id = NEW.id; END;`,
+  ]),
   // Las paradas son parte del despacho: cambiarlas también es cambiar el despacho. Los tiempos (trip_events) no:
   // se anotan evento por evento mientras el despacho está abierto, y contarlos daría conflictos falsos al cerrarlo.
-  ...['trip_stops'].flatMap((t) => [
-    `CREATE TRIGGER IF NOT EXISTS trg_version_${t}_ins AFTER INSERT ON ${t} BEGIN UPDATE trips SET version = version + 1 WHERE id = NEW.trip_id; END;`,
-    `CREATE TRIGGER IF NOT EXISTS trg_version_${t}_upd AFTER UPDATE ON ${t} BEGIN UPDATE trips SET version = version + 1 WHERE id = NEW.trip_id; END;`,
-    `CREATE TRIGGER IF NOT EXISTS trg_version_${t}_del AFTER DELETE ON ${t} BEGIN UPDATE trips SET version = version + 1 WHERE id = OLD.trip_id; END;`,
+  ...[['ins', 'INSERT', 'NEW'], ['upd', 'UPDATE', 'NEW'], ['del', 'DELETE', 'OLD']].flatMap(([s, evento, fila]) => [
+    `DROP TRIGGER IF EXISTS trg_version_trip_stops_${s};`,
+    `CREATE TRIGGER trg_version_trip_stops_${s} AFTER ${evento} ON trip_stops
+      BEGIN UPDATE trips SET version = version + 1, version_cambio = ${AHORA_MS} WHERE id = ${fila}.trip_id; END;`,
+    // Versión preliminar que también contaba los tiempos: se quita si quedó en alguna base de prueba.
+    `DROP TRIGGER IF EXISTS trg_version_trip_events_${s};`,
   ]),
-  // Versión preliminar que también contaba los tiempos: se quita si quedó en alguna base de prueba.
-  ...['ins', 'upd', 'del'].map((s) => `DROP TRIGGER IF EXISTS trg_version_trip_events_${s};`),
 ].join('\n');
 
 function migrar(db) {

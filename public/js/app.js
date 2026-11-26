@@ -30,6 +30,9 @@ let escribiendo = false; // hubo cambios sin guardar en la pantalla actual (no s
 function ocupado() {
   if (document.getElementById('modales').children.length) return true;
   if (escribiendo) return true;
+  // Con el cursor en un campo (aunque esté fuera de un formulario, como las horas del despacho que se guardan solas).
+  const activo = document.activeElement;
+  if (activo?.closest('#vista') && activo.matches('input:not([type=checkbox]):not([type=radio]):not([type=button]), textarea, select')) return true;
   const { id, params } = ruta();
   const tabRutas = params.get('tab') ?? (params.get('trip') || estado.usuario?.rol === 'bodega' ? 'despachos' : 'nueva');
   return id === 'rutas' && tabRutas === 'nueva' && !params.get('trip');
@@ -171,6 +174,8 @@ async function iniciar() {
       iniciarTiempoReal({
         estado, ocupado, refrescarVista, refrescarEstado, pintarMarco, mostrarLogin,
         seccionActual: () => ruta().id,
+        // En el detalle de un despacho, solo importan los cambios de ese despacho.
+        despachoAbierto: () => { const { id, params } = ruta(); return id === 'rutas' && Number(params.get('trip')) || null; },
       });
     }
     await refrescarEstado();

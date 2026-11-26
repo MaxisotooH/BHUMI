@@ -173,3 +173,52 @@ test('conflicto: al cerrar un despacho que otra persona ya cambió; anotar tiemp
     assert.equal(r.data.error.extra.usuario, 'Prueba admin');
   } finally { s.cerrar(); }
 });
+
+test('conflicto: nombra a quien realmente cambió, aunque haya sido desde otra sección', http, async () => {
+  const s = await iniciar();
+  try {
+    const ana = await s.comoRol('planificador', 'ana@empresa.cl');
+    const pedro = await s.comoRol('bodega', 'pedro@empresa.cl');
+    const veh = (await s.call('GET', '/vehiculos')).data[0];
+    // Antes: Ana editó el vehículo (queda en la auditoría).
+    await ana.call('PUT', `/vehiculos/${veh.id}`, { km_actual: 1000, version: veh.version });
+    // El admin abre el formulario del vehículo.
+    const abierto = (await s.call('GET', `/vehiculos/${veh.id}`)).data;
+    // Pedro cierra un despacho de ese vehículo: suma los km al odómetro y así cambia el vehículo.
+    const t = Number(s.db.prepare("INSERT INTO trips (fecha, vehicle_id, estado, distancia_km) VALUES ('2026-11-26', ?, 'en_ruta', 42)").run(veh.id).lastInsertRowid);
+    assert.equal((await pedro.call('POST', `/despachos/${t}/estado`, { estado: 'completado' })).status, 200);
+
+    const r = await s.call('PUT', `/vehiculos/${veh.id}`, { rendimiento_km_l: 10, version: abierto.version });
+    assert.equal(r.status, 409);
+    assert.equal(r.data.error.extra.usuario, 'Prueba bodega'); // Pedro, no Ana
+    assert.match(r.data.error.mensaje, /^Prueba bodega cambió este registro \(al guardar un despacho\)/);
+  } finally { s.cerrar(); }
+});
+
+test('conflicto: sin una escritura que coincida, no se adivina un nombre', http, async () => {
+  const s = await iniciar();
+  try {
+    const ana = await s.comoRol('planificador');
+    const veh = (await s.call('GET', '/vehiculos')).data[0];
+    await ana.call('PUT', `/vehiculos/${veh.id}`, { km_actual: 500, version: veh.version }); // edición antigua de Ana
+    const abierto = (await s.call('GET', `/vehiculos/${veh.id}`)).data;
+    // Un cambio sin solicitud asociada (p. ej. un script de mantenimiento), un rato después.
+    s.db.prepare("UPDATE auditoria SET ts = datetime(ts, '-1 hour')").run();
+    s.db.prepare('UPDATE vehicles SET km_actual = 900 WHERE id = ?').run(veh.id);
+    const r = await s.call('PUT', `/vehiculos/${veh.id}`, { rendimiento_km_l: 10, version: abierto.version });
+    assert.equal(r.status, 409);
+    assert.equal(r.data.error.extra.usuario, null);
+    assert.match(r.data.error.mensaje, /^Otra persona guardó cambios/);
+  } finally { s.cerrar(); }
+});
+
+test('conflicto: si fue la misma persona en otra pestaña, se lo dice así', http, async () => {
+  const s = await iniciar();
+  try {
+    const veh = (await s.call('GET', '/vehiculos')).data[0];
+    await s.call('PUT', `/vehiculos/${veh.id}`, { km_actual: 700, version: veh.version }); // "otra pestaña"
+    const r = await s.call('PUT', `/vehiculos/${veh.id}`, { rendimiento_km_l: 10, version: veh.version });
+    assert.equal(r.status, 409);
+    assert.match(r.data.error.mensaje, /^Tú mismo cambiaste este registro en otra pestaña/);
+  } finally { s.cerrar(); }
+});
