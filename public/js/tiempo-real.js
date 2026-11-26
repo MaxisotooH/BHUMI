@@ -8,13 +8,13 @@ import { PESTANA, toast } from './lib.js';
 
 /** Qué secciones muestran cada recurso (la sección actual se refresca solo si le afecta el cambio). */
 const AFECTA = {
-  despachos: ['panel', 'costos', 'kpi', 'clientes', 'rutas', 'vehiculos'],
+  despachos: ['panel', 'costos', 'kpi', 'clientes', 'rutas', 'vehiculos', 'hoy'],
   entregas: ['panel', 'clientes', 'rutas', 'cubicaje'],
   clientes: ['panel', 'clientes', 'rutas'],
-  vehiculos: ['panel', 'costos', 'rutas', 'vehiculos', 'cubicaje'],
+  vehiculos: ['panel', 'costos', 'rutas', 'vehiculos', 'cubicaje', 'hoy'],
   gastos: ['panel', 'costos', 'vehiculos'],
   productos: ['cubicaje', 'rutas'],
-  personal: ['kpi', 'rutas', 'configuracion'],
+  personal: ['kpi', 'rutas', 'configuracion', 'hoy'],
   zonas: ['clientes', 'rutas'],
   combustible: ['panel', 'costos', 'vehiculos', 'configuracion'],
   settings: ['panel', 'costos', 'kpi', 'clientes', 'rutas', 'vehiculos', 'configuracion'],

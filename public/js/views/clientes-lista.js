@@ -17,7 +17,7 @@ export async function pintarClientes(ctx, cont) {
 
   pintar(cont, html`
     <div class="fila entre" style="margin-bottom:12px"><p class="muted" style="margin:0;max-width:70ch">Registra a cada cliente con su dirección. La ubicación se obtiene con Google y se puede corregir a mano; con ella se calculan rutas, concentración de entregas y seguridad del sector.</p>
-      <div class="acciones fila"><button class="btn" id="plantilla">Plantilla Excel</button><button class="btn" id="geo-pend">Geolocalizar pendientes</button><button class="btn" id="importar">Importar Excel</button><input type="file" id="archivo" accept=".xlsx" hidden><button class="btn btn-primario" id="nuevo">Nuevo cliente</button></div></div>
+      <div class="acciones fila"><button class="btn" id="plantilla" data-requiere="POST /clientes/importar">Plantilla Excel</button><button class="btn" id="geo-pend" data-requiere="POST /clientes/geolocalizar-pendientes">Geolocalizar pendientes</button><button class="btn" id="importar" data-requiere="POST /clientes/importar">Importar Excel</button><input type="file" id="archivo" accept=".xlsx" hidden><button class="btn btn-primario" id="nuevo" data-requiere="POST /clientes">Nuevo cliente</button></div></div>
     <div class="card"><div class="card-cuerpo fila" style="border-bottom:1px solid var(--linea)">
       <input type="search" id="q" placeholder="Buscar por nombre, empresa, dirección o teléfono" style="max-width:340px" aria-label="Buscar clientes">
       <select id="region" style="max-width:240px" aria-label="Región">${opciones(nombresRegiones(meta), '', { vacio: 'Todas las regiones' })}</select>
@@ -33,7 +33,7 @@ export async function pintarClientes(ctx, cont) {
     filas = await get(`/clientes${qs({ q: f.q, region: f.region, comuna: f.comuna, pendiente: f.pendiente, sin_coordenadas: f.sin_coordenadas })}`);
     cont.querySelector('#resumen').textContent = `${pluralizar(filas.length, 'cliente', 'clientes')}${hayFiltro() ? '' : ` · ${filas.filter((c) => c.lat != null).length} con ubicación`}`;
     if (!filas.length) {
-      pintar(lista, vacio(hayFiltro() ? 'No hay clientes con esos filtros' : 'Aún no hay clientes', hayFiltro() ? 'Prueba con otra búsqueda o quita los filtros.' : 'Agrega tu primer cliente o importa tu lista desde Excel (descarga la plantilla arriba).', hayFiltro() ? '' : html`<button class="btn btn-primario" data-nuevo>Nuevo cliente</button>`));
+      pintar(lista, vacio(hayFiltro() ? 'No hay clientes con esos filtros' : 'Aún no hay clientes', hayFiltro() ? 'Prueba con otra búsqueda o quita los filtros.' : 'Agrega tu primer cliente o importa tu lista desde Excel (descarga la plantilla arriba).', hayFiltro() ? '' : html`<button class="btn btn-primario" data-nuevo data-requiere="POST /clientes">Nuevo cliente</button>`));
       return;
     }
     pintar(lista, html`<div class="tabla-wrap"><table><thead><tr><th>Cliente</th><th>Dirección</th><th>Teléfono</th><th>Frecuencia</th><th>Ubicación</th><th class="der">Pendientes</th><th>Última entrega</th><th></th></tr></thead><tbody>
@@ -41,7 +41,7 @@ export async function pintarClientes(ctx, cont) {
         <td>${c.direccion ?? html`<span class="tenue">Sin dirección</span>`}<div class="muted" style="font-size:13px">${[c.comuna, c.region].filter(Boolean).join(' · ')}</div></td>
         <td>${c.telefono ?? ''}</td><td>${c.frecuencia_compra ?? ''}</td><td>${precisionInsignia(c)}</td>
         <td class="der">${c.pendientes ? html`<span class="insignia aviso">${c.pendientes}</span>` : '0'}</td><td>${fecha(c.ultima_entrega)}</td>
-        <td class="der" style="white-space:nowrap"><button class="btn btn-texto btn-chico" data-editar="${c.id}">Editar</button>${c.lat == null && c.direccion ? html`<button class="btn btn-texto btn-chico" data-geo="${c.id}">Geolocalizar</button>` : ''}</td></tr>`)}
+        <td class="der" style="white-space:nowrap"><button class="btn btn-texto btn-chico" data-editar="${c.id}" data-requiere="PUT /clientes/:id">Editar</button>${c.lat == null && c.direccion ? html`<button class="btn btn-texto btn-chico" data-geo="${c.id}" data-requiere="POST /clientes/:id/geolocalizar">Geolocalizar</button>` : ''}</td></tr>`)}
       </tbody></table></div>`);
   }
   const recargar = debounce(() => cargar().catch(falla), 250);
@@ -110,7 +110,7 @@ export async function pintarClientes(ctx, cont) {
         ${c.observaciones ? html`<p class="muted" style="margin-top:8px">${c.observaciones}</p>` : ''}
         <dl class="kpis" style="margin:16px 0"><div class="kpi"><dt>Entregas realizadas</dt><dd class="valor num">${num0(c.entregas_realizadas)}</dd></div>
           <div class="kpi"><dt>Entregas pendientes</dt><dd class="valor num">${num0(c.pendientes)}</dd></div>
-          <div class="kpi"><dt>Costo promedio por entrega</dt><dd class="valor num">${c.costo_entrega.promedio != null ? clp(c.costo_entrega.promedio) : html`<span class="sin-dato">Sin despachos</span>`}</dd></div></dl>
+          <div class="kpi" data-costo><dt>Costo promedio por entrega</dt><dd class="valor num">${c.costo_entrega?.promedio != null ? clp(c.costo_entrega.promedio) : html`<span class="sin-dato">Sin despachos</span>`}</dd></div></dl>
         <h3 class="seccion-form">Productos despachados</h3>
         ${c.productos_despachados.length ? html`<table class="tabla-compacta"><tbody>${c.productos_despachados.map((p) => html`<tr><td>${p.producto}</td><td class="der">${num0(p.cantidad)}</td></tr>`)}</tbody></table>` : html`<p class="muted">Aún no se han despachado productos a este cliente.</p>`}
         <h3 class="seccion-form">Historial de entregas</h3>

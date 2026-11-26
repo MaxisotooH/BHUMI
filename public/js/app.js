@@ -1,12 +1,13 @@
 // Arranque de la interfaz: menú, enrutador y estado compartido.
 import { html, raw, pintar, get, clp, destruirGraficos, falla, esc, descargar, alHacer } from './lib.js';
 import { activarDemo } from './maps.js';
-import { mostrarLogin, fichaUsuario, abrirMenuUsuario, veSeccion, seccionInicial } from './sesion.js';
+import { mostrarLogin, fichaUsuario, abrirMenuUsuario, veSeccion, seccionInicial, activarPermisos } from './sesion.js';
 import { iniciarTiempoReal, quitarBarraCambios } from './tiempo-real.js';
 
 const icono = (d) => `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
 const SECCIONES = [
   { id: 'panel', titulo: 'Panel de análisis', corto: 'Compara rutas, conductores, clientes y vehículos', icono: '<rect x="3" y="12" width="4" height="9" rx="1"/><rect x="10" y="7" width="4" height="14" rx="1"/><rect x="17" y="3" width="4" height="18" rx="1"/>' },
+  { id: 'hoy', titulo: 'Hoy', corto: 'Despachos del día: marca cada momento con un toque', icono: '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4L6 18M18 6l1.4-1.4"/>' },
   { id: 'costos', titulo: 'Control de costos', corto: 'Lo modelado frente a lo gastado de verdad', icono: '<circle cx="12" cy="12" r="9"/><path d="M14.8 9.2c-.5-1-1.6-1.5-2.8-1.5-1.6 0-2.8.8-2.8 2 0 3 5.6 1.4 5.6 4.4 0 1.2-1.2 2-2.8 2-1.3 0-2.4-.6-2.9-1.6M12 6v1.7M12 16.3V18"/>' },
   { id: 'kpi', titulo: 'Indicadores KPI', corto: 'Tiempos y cumplimiento del equipo', icono: '<circle cx="12" cy="13.5" r="7.5"/><path d="M12 9.5v4l2.5 1.5M9.5 2.5h5M12 2.5V6"/>' },
   { id: 'clientes', titulo: 'Clientes y zonas', corto: 'Dónde se entrega y qué tan seguro es', icono: '<path d="M12 21s-7-5.6-7-11a7 7 0 0 1 14 0c0 5.4-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>' },
@@ -159,7 +160,9 @@ async function iniciar() {
       // Servidor central: sin sesión se muestra el inicio de sesión; si la sesión vence después, también.
       window.addEventListener('bhumi:sin-sesion', (e) => mostrarLogin(e.detail));
       try {
-        estado.usuario = (await get('/auth/yo')).usuario;
+        const yo = await get('/auth/yo');
+        estado.usuario = yo.usuario;
+        activarPermisos(yo.permisos);
       } catch (e) {
         if (e.status === 401) return mostrarLogin();
         throw e;

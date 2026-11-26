@@ -65,7 +65,7 @@ Desde ahí, el administrador crea al resto en **Configuración → Usuarios**.
 |---|---|
 | Administrador | Todo, incluidos usuarios, Google, punto de partida y respaldo. |
 | Planificador | Rutas, clientes, flota, costos, KPI, combustible, metas y personal. |
-| Operador de bodega | Despachos y entregas del día, tiempos, km y cargas de combustible. No entra al Panel, Control de costos, KPI ni Configuración, y no planifica, cancela ni elimina despachos. (Por ahora sí ve el costo estimado dentro de cada despacho.) |
+| Operador de bodega | Despachos y entregas del día, tiempos, km y cargas de combustible, desde la página **Hoy** (pensada para el celular). No ve costos en ninguna pantalla (el servidor no se los envía), ni entra al Panel, Control de costos, KPI o Configuración, y no planifica, cancela ni elimina despachos. |
 
 Los permisos se revisan en el servidor en cada solicitud. Cada escritura queda registrada (quién, qué, cuándo y desde qué IP) en **Configuración → Usuarios → Actividad reciente**.
 

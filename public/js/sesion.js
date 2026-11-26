@@ -13,8 +13,45 @@ const SECCIONES_ROL = {
 };
 /** ¿Puede el usuario abrir esta sección? Sin usuario (versión de doble clic) se ve todo. */
 export const veSeccion = (usuario, id) => !usuario || !SECCIONES_ROL[id] || SECCIONES_ROL[id].includes(usuario.rol);
-/** Sección con la que parte cada rol. */
-export const seccionInicial = (usuario) => (usuario?.rol === 'bodega' ? 'rutas' : 'panel');
+/** Sección con la que parte cada rol. Bodega parte en "Hoy": los despachos del día, pensado para el celular. */
+export const seccionInicial = (usuario) => (usuario?.rol === 'bodega' ? 'hoy' : 'panel');
+
+// ---------- Botones según el rol ----------
+// El servidor envía sus reglas (GET /auth/yo → permisos). Con ellas se ocultan los botones que el rol no puede
+// usar; cada botón declara lo que necesita con data-requiere="MÉTODO /ruta" (":id" vale por cualquier número).
+// Es solo para no mostrar botones inútiles: el servidor revisa cada acción igual.
+let puedeFn = () => true;
+
+const normalizar = (r) => String(r).toLowerCase().replace(/\/{2,}/g, '/').replace(/\/+$/, '') || '/';
+
+/** ¿Puede el usuario actual hacer `metodo` sobre `ruta`? Sin reglas (versión de doble clic), sí. */
+export const puede = (metodo, ruta) => puedeFn(String(metodo).toUpperCase(), normalizar(String(ruta).replace(/:id/g, '1')));
+
+function aplicarPermisos(raiz) {
+  for (const el of raiz.querySelectorAll?.('[data-requiere]') ?? []) {
+    const [m, r] = el.dataset.requiere.split(' ');
+    el.classList.toggle('sin-permiso', !puede(m, r));
+  }
+}
+
+/** Activa las reglas del rol y oculta, ahora y en todo lo que se pinte después, los botones sin permiso. */
+export function activarPermisos(permisos) {
+  if (!permisos || permisos.todo) return;
+  const soloAdmin = permisos.solo_admin.map((s) => new RegExp(s));
+  const lee = permisos.lista?.lee.map((s) => new RegExp(s));
+  const escribe = permisos.lista?.escribe.map(([m, s]) => [m, new RegExp(s)]);
+  puedeFn = (m, r) => {
+    if (soloAdmin.some((re) => re.test(r))) return false;
+    if (!permisos.lista) return true; // planificador: todo menos lo de Admin
+    if (m === 'GET' || m === 'HEAD') return lee.some((re) => re.test(r));
+    return escribe.some(([mm, re]) => mm === m && re.test(r));
+  };
+  document.body.classList.add(`rol-${permisos.rol}`);
+  aplicarPermisos(document.body);
+  new MutationObserver((cambios) => {
+    for (const c of cambios) for (const n of c.addedNodes) if (n.nodeType === 1) { aplicarPermisos(n); if (n.matches?.('[data-requiere]')) aplicarPermisos(n.parentNode); }
+  }).observe(document.body, { childList: true, subtree: true });
+}
 
 /** Reemplaza la aplicación por la pantalla de inicio de sesión. Al entrar, recarga la página con la sesión nueva. */
 export function mostrarLogin(mensaje = '') {

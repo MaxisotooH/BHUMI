@@ -9,7 +9,7 @@ const scrypt = promisify(crypto.scrypt);
 export const ROLES_USUARIO = [
   { id: 'admin', nombre: 'Administrador', detalle: 'Todo, incluidos usuarios, Google, punto de partida y respaldo.' },
   { id: 'planificador', nombre: 'Planificador', detalle: 'Rutas, clientes, flota, costos, KPI, combustible, metas y personal.' },
-  { id: 'bodega', nombre: 'Operador de bodega', detalle: 'Despachos y entregas del día, tiempos, km y cargas de combustible. No entra al Panel, Control de costos, KPI ni Configuración, y no planifica rutas.' },
+  { id: 'bodega', nombre: 'Operador de bodega', detalle: 'Despachos y entregas del día, tiempos, km y cargas de combustible. No ve costos ni entra al Panel, Control de costos, KPI ni Configuración, y no planifica rutas.' },
 ];
 const ROL_VALIDO = new Set(ROLES_USUARIO.map((r) => r.id));
 
@@ -97,6 +97,36 @@ export function permitido(rol, metodo, ruta) {
     return BODEGA_ESCRIBE.some(([m, re]) => m === metodo && re.test(ruta));
   }
   return false;
+}
+
+/**
+ * Las mismas reglas de `permitido`, en texto, para que la interfaz oculte lo que el rol no puede usar.
+ * La interfaz solo las usa para no mostrar botones inútiles: quien decide es siempre el servidor.
+ */
+export function reglasPara(rol) {
+  return {
+    rol,
+    todo: rol === 'admin',
+    solo_admin: SOLO_ADMIN.map((re) => re.source),
+    lista: rol === 'bodega' ? { lee: BODEGA_LEE.map((re) => re.source), escribe: BODEGA_ESCRIBE.map(([m, re]) => [m, re.source]) } : null,
+  };
+}
+
+// ---------- Costos que Bodega no ve ----------
+// Se quitan de todas las respuestas para ese rol (no basta con esconderlos en pantalla: la API los entregaría igual).
+// Quedan visibles el precio por litro del combustible (público) y el monto de las cargas que el propio operador registra.
+const CAMPO_COSTO = /^(costo|ahorro|valor_)/;
+// "alternativas" y "baseline" vienen en el plan guardado del despacho: son las rutas evaluadas con su costo.
+const CAMPOS_COSTO = new Set(['nota_ahorro', 'depreciacion', 'estacionamientos', 'otros_gastos', 'peajes', 'precio_combustible', 'alternativas', 'baseline', 'baseline_total']);
+export const esCampoCosto = (k) => CAMPO_COSTO.test(k) || CAMPOS_COSTO.has(k);
+
+/** Copia del valor sin los campos de costo, a cualquier profundidad. */
+export function sinCostos(x) {
+  if (Array.isArray(x)) return x.map(sinCostos);
+  if (!x || typeof x !== 'object' || Buffer.isBuffer(x)) return x;
+  const out = {};
+  for (const [k, v] of Object.entries(x)) if (!esCampoCosto(k)) out[k] = sinCostos(v);
+  return out;
 }
 
 /** Reglas que miran el cuerpo: Bodega cierra o inicia despachos, pero no los cancela (no tiene vuelta atrás). */
@@ -247,6 +277,11 @@ export function crearAuth({ db, express = expressReal, ahora = () => Date.now() 
     if (req.method === 'PUT' && ruta === '/settings' && s.rol !== 'admin' && req.body && typeof req.body === 'object') {
       for (const k of AJUSTES_SOLO_ADMIN) delete req.body[k];
     }
+    if (s.rol === 'bodega') {
+      // Todas sus respuestas JSON salen sin campos de costo (también las de escrituras, que devuelven el registro).
+      const json = res.json.bind(res);
+      res.json = (cuerpo) => json(sinCostos(cuerpo));
+    }
     if (ESCRITURA.has(req.method)) {
       res.on('finish', () => auditar(s.id, req.method, { ruta: req.originalUrl.split('?')[0].replace(/^\/api/, ''), estado: res.statusCode, ip: req.ip }));
     }
@@ -258,7 +293,7 @@ export function crearAuth({ db, express = expressReal, ahora = () => Date.now() 
 
   privado.get('/auth/yo', (req, res) => {
     const u = db.prepare('SELECT * FROM usuarios WHERE id = ?').get(req.usuario.id);
-    res.json({ usuario: usuarioPublico(u), roles: ROLES_USUARIO });
+    res.json({ usuario: usuarioPublico(u), roles: ROLES_USUARIO, permisos: reglasPara(u.rol) });
   });
 
   privado.put('/auth/clave', wrap(async (req, res) => {

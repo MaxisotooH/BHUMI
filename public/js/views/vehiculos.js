@@ -24,7 +24,7 @@ export default async function (ctx) {
   pintar(root, html`
     <div class="pagina-cab"><div><h2 style="font-size:20px">Control de kilometraje</h2>
       <p>Anota cada semana los kilómetros de cada vehículo. Con eso el sistema calcula el costo de operación, el desgaste y cuándo toca la mantención preventiva. Si falta un dato, el indicador queda en blanco: nada se estima.</p></div>
-      <div class="acciones">${botonesExportar('/api/reportes/flota', {})}<button class="btn" id="nuevo">Agregar vehículo</button><button class="btn btn-primario" id="km-nuevo" ${activos.length ? '' : 'disabled'}>Registrar km de la semana</button></div></div>
+      <div class="acciones">${botonesExportar('/api/reportes/flota', {})}<button class="btn" id="nuevo" data-requiere="POST /vehiculos">Agregar vehículo</button><button class="btn btn-primario" id="km-nuevo" ${activos.length ? '' : 'disabled'}>Registrar km de la semana</button></div></div>
     ${flota.alertas.length ? html`<div class="aviso ${flota.alertas.some((a) => a.nivel === 'alta') ? 'rojo' : 'ambar'}" style="margin-bottom:16px"><h3>Atención en la flota</h3><ul>${flota.alertas.map((a) => html`<li><b>${a.nombre}</b>: ${a.texto}</li>`)}</ul></div>` : ''}
     ${pestanas('vehiculos', TABS, tab)}
     ${tab === 'flota' ? vistaFlota(vehiculos, flota, meta) : vistaKm(flota, flota.semana_actual)}`);
@@ -50,20 +50,20 @@ export default async function (ctx) {
 
 // ---------- Estado de la flota ----------
 function vistaFlota(vehiculos, flota, meta) {
-  if (!vehiculos.length) return html`<div class="card">${vacio('No hay vehículos', 'Agrega el primer vehículo de la flota con sus datos reales: rendimiento, capacidad y medidas de carga.', html`<button class="btn btn-primario" data-nuevo>Agregar vehículo</button>`)}</div>`;
+  if (!vehiculos.length) return html`<div class="card">${vacio('No hay vehículos', 'Agrega el primer vehículo de la flota con sus datos reales: rendimiento, capacidad y medidas de carga.', html`<button class="btn btn-primario" data-nuevo data-requiere="POST /vehiculos">Agregar vehículo</button>`)}</div>`;
   const estadoDe = new Map(flota.vehiculos.map((e) => [e.vehicle_id, e]));
   return html`<div class="apilar">${vehiculos.map((v) => {
     const e = estadoDe.get(v.id);
-    const ck = v.costo_km;
+    const ck = v.costo_km ?? {}; // Bodega no recibe costos
     const [claseM, textoM] = MANT[e?.mantencion.estado ?? 'sin_datos'];
     return html`<article class="card">
       <div class="card-cab"><h2>${nombreVehiculo(v)}</h2>${v.activo ? '' : html`<span class="insignia">Inactivo</span>`}<span class="insignia ${claseM}">${textoM}</span>
-        <div class="acciones"><button class="btn btn-chico" data-km="${v.id}" ${v.activo ? '' : 'disabled'}>Registrar km</button><button class="btn btn-chico" data-cargas="${v.id}">Cargas de combustible</button><button class="btn btn-chico" data-mantencion="${v.id}" ${v.activo ? '' : 'disabled'}>Registrar mantención</button><button class="btn btn-chico btn-primario" data-editar="${v.id}">Editar datos</button></div></div>
+        <div class="acciones"><button class="btn btn-chico" data-km="${v.id}" ${v.activo ? '' : 'disabled'}>Registrar km</button><button class="btn btn-chico" data-cargas="${v.id}">Cargas de combustible</button><button class="btn btn-chico" data-mantencion="${v.id}" data-requiere="POST /gastos" ${v.activo ? '' : 'disabled'}>Registrar mantención</button><button class="btn btn-chico btn-primario" data-editar="${v.id}" data-requiere="PUT /vehiculos/:id">Editar datos</button></div></div>
       <div class="card-cuerpo">
         <div class="fila" style="gap:28px;align-items:flex-start">
           <div style="min-width:210px"><div class="muted">${[v.anio, v.motor ? `motor ${v.motor}` : null, v.combustible, v.patente].filter(Boolean).join(' · ')}</div>
-            <div style="margin-top:10px" class="muted">Costo real por kilómetro</div>
-            <div class="num" style="font-family:var(--f-num);font-size:38px;font-weight:600;line-height:1.1">${ck.total != null ? html`${clp(ck.total)}<small style="font-size:17px;color:var(--tinta-2)">/km</small>` : html`<span class="sin-dato" style="font-size:16px">Sin calcular</span>`}</div>
+            <div style="margin-top:10px" class="muted" data-costo>Costo real por kilómetro</div>
+            <div class="num" data-costo style="font-family:var(--f-num);font-size:38px;font-weight:600;line-height:1.1">${ck.total != null ? html`${clp(ck.total)}<small style="font-size:17px;color:var(--tinta-2)">/km</small>` : html`<span class="sin-dato" style="font-size:16px">Sin calcular</span>`}</div>
             ${ck.total == null ? '' : html`<div class="muted" style="font-size:13px">Combustible ${clp(ck.combustible)} + desgaste ${clp(ck.desgaste)}</div>`}</div>
           <dl class="kpis" style="flex:1;min-width:320px;grid-template-columns:repeat(auto-fill,minmax(160px,1fr))">
             ${kpi('Odómetro', e?.odometro_km != null ? num0(e.odometro_km) : null, { unidad: 'km', detalle: e?.odometro_fuente ?? 'Anótalo en el registro semanal', vacio: 'Sin registrar' })}
@@ -74,15 +74,15 @@ function vistaFlota(vehiculos, flota, meta) {
             ${kpi('Consumo real medido', v.consumo_real ? num1(v.consumo_real.kmPorLitro) : null, { unidad: 'km/L', detalle: v.consumo_real ? `${pluralizar(v.consumo_real.cargas, 'carga', 'cargas')}${v.rendimiento_km_l ? ` · configurado ${num1(v.rendimiento_km_l)}` : ''}` : 'Registra al menos 2 cargas', vacio: 'Sin cargas' })}
           </dl></div>
         ${e && e.neumaticos.consumido_pct != null ? html`<div style="margin-top:12px;max-width:420px"><div class="muted" style="font-size:13px;margin-bottom:3px">Desgaste de neumáticos</div>${barra(e.neumaticos.consumido_pct, 100, { color: e.neumaticos.consumido_pct >= 90 ? 'var(--rojo)' : 'var(--serie-1)', alto: 8 })}</div>` : ''}
-        ${ck.faltantes.length ? html`<div class="aviso ambar" style="margin:14px 0 0"><b>Para calcular el costo real de este vehículo falta:</b><ul>${ck.faltantes.map((f) => html`<li>${f}</li>`)}</ul></div>` : ''}
-        ${v.carga_largo_cm && v.carga_ancho_cm && v.carga_alto_cm ? '' : html`<p class="muted" style="font-size:13px;margin:10px 0 0">Sin medidas del espacio de carga: no se puede calcular el cubicaje para este vehículo. <button class="btn btn-texto btn-chico" data-editar="${v.id}">Agregarlas</button></p>`}
+        ${ck.faltantes?.length ? html`<div class="aviso ambar" data-costo style="margin:14px 0 0"><b>Para calcular el costo real de este vehículo falta:</b><ul>${ck.faltantes.map((f) => html`<li>${f}</li>`)}</ul></div>` : ''}
+        ${v.carga_largo_cm && v.carga_ancho_cm && v.carga_alto_cm ? '' : html`<p class="muted" style="font-size:13px;margin:10px 0 0">Sin medidas del espacio de carga: no se puede calcular el cubicaje para este vehículo. <button class="btn btn-texto btn-chico" data-editar="${v.id}" data-requiere="PUT /vehiculos/:id">Agregarlas</button></p>`}
       </div></article>`;
   })}</div>`;
 }
 
 // ---------- Kilómetros por semana ----------
 function vistaKm(flota, semanaActual) {
-  if (!flota.vehiculos.length) return html`<div class="card">${vacio('No hay vehículos activos', 'Agrega un vehículo para llevar su kilometraje semanal.', html`<button class="btn btn-primario" data-nuevo>Agregar vehículo</button>`)}</div>`;
+  if (!flota.vehiculos.length) return html`<div class="card">${vacio('No hay vehículos activos', 'Agrega un vehículo para llevar su kilometraje semanal.', html`<button class="btn btn-primario" data-nuevo data-requiere="POST /vehiculos">Agregar vehículo</button>`)}</div>`;
   const hayRegistro = flota.vehiculos.some((e) => e.semanas.some((s) => s.km_registrado != null));
   return html`
     <div class="card" style="margin-bottom:16px"><div class="card-cab"><h2>Kilómetros recorridos por semana</h2><span class="sub">Lo que anotas del tablero, semana a semana (lunes a domingo)</span></div>
@@ -92,7 +92,7 @@ function vistaKm(flota, semanaActual) {
         ${[...e.semanas].reverse().map((s) => html`<tr><td>${fecha(s.semana_inicio)}${s.semana_inicio === semanaActual ? html` <span class="insignia info">Esta semana</span>` : ''}${s.nota ? html`<span class="sub-cel">${s.nota}</span>` : ''}</td>
           <td class="der">${s.km_registrado != null ? html`<b>${num0(s.km_registrado)}</b>` : html`<span class="tenue">Sin registrar</span>`}</td><td class="der">${s.km_despachos ? num1(s.km_despachos) : '—'}</td><td class="der">${s.despachos || '—'}</td><td class="der">${s.paradas || '—'}</td>
           <td class="der">${s.odometro != null ? num0(s.odometro) : '—'}</td><td class="der">${s.costo_operacion != null ? clp(s.costo_operacion) : html`<span class="tenue">Sin dato</span>`}</td>
-          <td class="der" style="white-space:nowrap"><button class="btn btn-texto btn-chico" data-km="${e.vehicle_id}" data-semana="${s.semana_inicio}">${s.km_registrado != null ? 'Editar' : 'Registrar'}</button>${s.km_registrado != null ? html`<button class="btn btn-texto btn-chico" data-borrar-km="${s.semana_inicio}" data-vehiculo="${e.vehicle_id}">Quitar</button>` : ''}</td></tr>`)}</tbody></table></div>
+          <td class="der" style="white-space:nowrap"><button class="btn btn-texto btn-chico" data-km="${e.vehicle_id}" data-semana="${s.semana_inicio}">${s.km_registrado != null ? 'Editar' : 'Registrar'}</button>${s.km_registrado != null ? html`<button class="btn btn-texto btn-chico" data-borrar-km="${s.semana_inicio}" data-requiere="DELETE /km-semanal/:id" data-vehiculo="${e.vehicle_id}">Quitar</button>` : ''}</td></tr>`)}</tbody></table></div>
       <div class="card-cuerpo muted" style="font-size:13px;border-top:1px solid var(--linea)">“Km de despachos” son los kilómetros de rutas completadas en el sistema; “Km registrados” es lo que marcó el tablero, que incluye todo el uso del vehículo.</div></div>`)}</div>`;
 }
 
