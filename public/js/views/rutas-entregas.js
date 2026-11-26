@@ -39,10 +39,10 @@ export async function pintarEntregas(ctx, root) {
       <td style="max-width:280px">${productosTxt(e)}${e.peso_kg != null ? html`<div class="muted" style="font-size:13px">${num1(e.peso_kg)} kg</div>` : ''}</td>
       <td>${e.fecha ? fecha(e.fecha) : html`<span class="tenue">Sin fecha</span>`}${e.ventana_desde ? html`<div class="muted" style="font-size:13px">${e.ventana_desde}${e.ventana_hasta ? `–${e.ventana_hasta}` : ''}</div>` : ''}</td>
       <td>${insigniaEstado(e.estado)}${e.motivo_reprogramacion ? html`<div class="muted" style="font-size:12.5px">${e.motivo_reprogramacion}</div>` : ''}${e.trip_id ? html`<div><a href="#/rutas?tab=despachos&trip=${e.trip_id}">Despacho N° ${e.trip_id}</a></div>` : ''}</td>
-      <td class="der" style="white-space:nowrap">${e.estado !== 'realizada' && e.estado !== 'cancelada' && !e.trip_id ? html`<button class="btn btn-texto btn-chico" data-editar="${e.id}">Editar</button><button class="btn btn-texto btn-chico" data-reprog="${e.id}">Reprogramar</button>` : ''}
+      <td class="der" style="white-space:nowrap">${e.estado !== 'realizada' && e.estado !== 'cancelada' && !e.trip_id ? html`<button class="btn btn-texto btn-chico" data-editar="${e.id}" data-requiere="PUT /entregas/:id">Editar</button><button class="btn btn-texto btn-chico" data-reprog="${e.id}">Reprogramar</button>` : ''}
         ${!e.trip_id && e.estado !== 'realizada' ? html`<button class="btn btn-texto btn-chico" data-hecha="${e.id}">Marcar realizada</button>` : ''}
         ${e.estado === 'cancelada' ? html`<button class="btn btn-texto btn-chico" data-reabrir="${e.id}">Reabrir</button>` : ''}
-        ${!e.trip_id && e.estado !== 'realizada' ? html`<button class="btn btn-texto btn-chico" data-borrar="${e.id}">Eliminar</button>` : ''}</td></tr>`;
+        ${!e.trip_id && e.estado !== 'realizada' ? html`<button class="btn btn-texto btn-chico" data-borrar="${e.id}" data-requiere="DELETE /entregas/:id">Eliminar</button>` : ''}</td></tr>`;
   }
 
   function pintarEntregas() {
@@ -54,7 +54,7 @@ export async function pintarEntregas(ctx, root) {
       <label class="check"><input type="checkbox" id="f-agrupar" ${f.agrupar ? raw('checked') : ''}> Agrupar por comuna</label>
       <span class="espacio"></span><span class="muted">${pluralizar(entregas.length, 'entrega', 'entregas')}</span></div>`;
     if (!entregas.length) {
-      pintar(cuerpo, html`${head}${vacio(f.estado === 'pendientes' && !f.region && !f.comuna ? 'No hay entregas pendientes' : 'No hay entregas con esos filtros', 'Registra lo que debes entregar: elige el cliente, los productos y las cantidades.', html`<button class="btn btn-primario" data-nueva>Nueva entrega</button>`)}</div>`);
+      pintar(cuerpo, html`${head}${vacio(f.estado === 'pendientes' && !f.region && !f.comuna ? 'No hay entregas pendientes' : 'No hay entregas con esos filtros', 'Registra lo que debes entregar: elige el cliente, los productos y las cantidades.', html`<button class="btn btn-primario" data-nueva data-requiere="POST /entregas">Nueva entrega</button>`)}</div>`);
     } else {
       const grupos = f.agrupar ? agrupar(entregas).sort((a, b) => a[0].localeCompare(b[0], 'es')) : [['', entregas]];
       pintar(cuerpo, html`${head}<div class="tabla-wrap"><table><thead><tr><th></th><th>Cliente</th><th>Comuna</th><th>Productos</th><th>Fecha y horario</th><th>Estado</th><th></th></tr></thead>

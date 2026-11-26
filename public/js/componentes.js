@@ -74,7 +74,8 @@ export function activarPeriodo(root, seccion, params, navegar, conservar = []) {
 /** Botones para bajar un informe en Excel o PDF. `base` es la ruta sin extensión, p. ej. /api/reportes/panel. */
 export function botonesExportar(base, query = {}, { pdf = true } = {}) {
   const q = qs(query);
-  return html`<div class="fila"><button class="btn btn-chico" type="button" data-descargar="${base}.xlsx${q}">Descargar Excel</button>${pdf ? html`<button class="btn btn-chico" type="button" data-descargar="${base}.pdf${q}">Descargar PDF</button>` : ''}</div>`;
+  const ruta = base.replace(/^\/api/, ''); // para ocultarlos a quien no puede descargar ese reporte
+  return html`<div class="fila"><button class="btn btn-chico" type="button" data-descargar="${base}.xlsx${q}" data-requiere="GET ${ruta}.xlsx">Descargar Excel</button>${pdf ? html`<button class="btn btn-chico" type="button" data-descargar="${base}.pdf${q}" data-requiere="GET ${ruta}.pdf">Descargar PDF</button>` : ''}</div>`;
 }
 export function activarExportar(root) {
   alHacer(root, 'click', '[data-descargar]', async (e, b) => { b.disabled = true; try { await descargar(b.dataset.descargar); } finally { b.disabled = false; } });

@@ -365,3 +365,37 @@ td.der .sub-cel { text-align: right; }
 .ficha-usuario .avatar { position: relative; }
 .ficha-usuario .avatar::after { content: ''; position: absolute; right: -2px; bottom: -2px; width: 9px; height: 9px; border-radius: 50%; border: 2px solid #fff; background: var(--tinta-3); }
 .ficha-usuario.en-vivo .avatar::after { background: var(--ok); }
+
+/* Permisos por rol (servidor central): botones que el rol no puede usar y datos de costo que Bodega no ve */
+.sin-permiso { display: none !important; }
+.rol-bodega [data-costo], .rol-bodega .dato-costo { display: none !important; }
+
+/* Hoy: despachos del día para bodega (celular o tablet) */
+.hoy { display: grid; gap: 16px; max-width: 760px; }
+.hoy-intro { margin: 0; }
+.hoy-card { padding: 0; overflow: hidden; }
+.hoy-cab { padding: 16px 18px 6px; }
+.hoy-cab h2 { margin: 0; font-size: 20px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.hoy-cab p { margin: 4px 0 0; }
+.hoy-pasos { list-style: none; margin: 0; padding: 0; }
+.hoy-paso { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 18px; border-top: 1px solid var(--linea); flex-wrap: wrap; }
+.hoy-paso.siguiente { background: var(--senal-suave); }
+.hoy-paso.hecho .hoy-texto b { color: var(--tinta-2); font-weight: 600; }
+.hoy-texto { display: grid; gap: 2px; min-width: 0; }
+.hoy-grupo { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--tinta-3); }
+.hoy-texto b { font-size: 17px; }
+.hoy-accion { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.hoy-valor { font-family: var(--f-num); font-size: 26px; font-weight: 600; color: var(--ok); }
+.hoy-boton { min-height: 48px; padding-inline: 18px; font-size: 16px; justify-content: center; }
+.hoy-hora { font-size: 18px; min-height: 44px; width: 130px; }
+.hoy-pie { display: flex; gap: 10px; padding: 14px 18px; border-top: 1px solid var(--linea); flex-wrap: wrap; }
+@media (max-width: 600px) {
+  .hoy-paso { flex-direction: column; align-items: stretch; }
+  .hoy-accion { justify-content: space-between; }
+  .hoy-accion .hoy-boton { flex: 1; }
+  .hoy-pie .hoy-boton { flex: 1 1 100%; }
+}
+/* En el celular, la barra superior deja solo la ficha del usuario y los avisos de algo que falta */
+@media (max-width: 600px) {
+  .topbar-datos .dato-chip:not(.ficha-usuario):not(.alerta) { display: none; }
+}

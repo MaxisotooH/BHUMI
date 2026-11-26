@@ -13,7 +13,7 @@ export async function pintarConsolidacion(ctx, cont) {
       ${kpi('Entregas pendientes', num0(r.entregas_pendientes), { detalle: `${num0(r.entregas_en_grupos)} están cerca de otra` })}
       ${kpi('Grupos que se pueden juntar', num0(r.grupos), { vacio: '0' })}
       ${kpi('Despachos que se evitan', num0(r.despachos_evitables), { detalle: 'Si se juntan todos los grupos' })}
-      ${kpi('Ahorro estimado', r.ahorro_estimado != null ? clp(r.ahorro_estimado) : null, { vacio: 'Sin distancias aún', detalle: r.ahorro_estimado != null ? 'Con distancias de Google ya consultadas' : 'Calcula la ruta con Google para ver el ahorro' })}
+      ${kpi('Ahorro estimado', r.ahorro_estimado != null ? clp(r.ahorro_estimado) : null, { tono: 'dato-costo', vacio: 'Sin distancias aún', detalle: r.ahorro_estimado != null ? 'Con distancias de Google ya consultadas' : 'Calcula la ruta con Google para ver el ahorro' })}
     </dl>
     ${s.sin_medidas.length ? faltaDato('Faltan medidas para calcular algunos grupos', s.sin_medidas.map((m) => `${m.tipo === 'producto' ? 'Producto' : 'Vehículo'} ${m.nombre}: falta ${m.faltan.join(', ')}`), html`<a class="btn btn-chico" href="#/cubicaje?tab=productos">Completar productos</a> <a class="btn btn-chico" href="#/vehiculos">Completar vehículos</a>`) : ''}
     ${r.entregas_pendientes === 0 ? html`<div class="card">${vacio('No hay entregas pendientes', 'Cuando registres entregas con productos, aquí aparecerán las que conviene juntar.', html`<a class="btn btn-primario" href="#/rutas?tab=entregas">Ir a entregas</a>`)}</div>`

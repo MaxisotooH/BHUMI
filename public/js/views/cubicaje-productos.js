@@ -23,8 +23,8 @@ export async function pintarProductos(ctx, cont) {
         <td class="der">${p.peso_kg != null ? `${num1(p.peso_kg)} kg` : html`<span class="tenue">—</span>`}</td>
         <td>${p.apilable ? 'Sí' : 'No'}</td><td>${p.rotable ? 'Sí' : 'No'}</td>
         <td>${p.medidas_completas ? html`<span class="insignia ok">Completas</span>` : html`<span class="insignia aviso">Faltan</span>`}</td>
-        <td class="der"><button class="btn btn-chico" data-editar="${p.id}">Editar</button></td></tr>`)}</tbody></table></div>`
-      : vacio('Aún no hay productos', 'Agrega los productos que despachas con sus medidas y peso reales. Puedes copiarlos de la ficha del proveedor o medirlos con huincha.', html`<button class="btn btn-primario" data-nuevo>Agregar producto</button>`)}</div>`);
+        <td class="der"><button class="btn btn-chico" data-editar="${p.id}" data-requiere="PUT /productos/:id">Editar</button></td></tr>`)}</tbody></table></div>`
+      : vacio('Aún no hay productos', 'Agrega los productos que despachas con sus medidas y peso reales. Puedes copiarlos de la ficha del proveedor o medirlos con huincha.', html`<button class="btn btn-primario" data-nuevo data-requiere="POST /productos">Agregar producto</button>`)}</div>`);
 
   const porId = new Map(productos.map((p) => [p.id, p]));
   cont.querySelector('#prod-nuevo').addEventListener('click', () => formularioProducto({ alGuardar: recargar }));
