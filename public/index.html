@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BHUMI · Logística y distribución</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230E4D3C'/%3E%3Cpath d='M8 22V10h7a3.5 3.5 0 0 1 0 7H8m7 0a3.5 3.5 0 0 1 0 5H8' fill='none' stroke='%23fff' stroke-width='2.4'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar" id="sidebar" aria-label="Menú principal">
+      <a class="marca" href="#/panel" aria-label="BHUMI, ir al panel de análisis">
+        <svg viewBox="0 0 40 40" width="34" height="34" aria-hidden="true"><rect width="40" height="40" rx="8" fill="#fff"/><path d="M11 29V11h8.5a4.5 4.5 0 0 1 0 9H11m8.5 0a4.5 4.5 0 0 1 0 9H11" fill="none" stroke="#0E4D3C" stroke-width="3.2"/></svg>
+        <span class="marca-texto">BHUMI<small>Logística y distribución</small></span>
+      </a>
+      <nav id="nav"></nav>
+      <div class="sidebar-pie" id="sidebar-pie"></div>
+    </aside>
+    <div class="principal">
+      <header class="topbar">
+        <button class="btn-menu" id="btn-menu" aria-label="Abrir menú" aria-controls="sidebar">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+        </button>
+        <div class="titulos"><h1 id="titulo-pagina">BHUMI</h1><p id="subtitulo-pagina"></p></div>
+        <div class="topbar-datos" id="topbar-datos"></div>
+      </header>
+      <main id="vista" class="vista" tabindex="-1"></main>
+    </div>
+  </div>
+  <div id="toasts" class="toasts" role="status" aria-live="polite"></div>
+  <div id="modales"></div>
+  <script src="/vendor/chart.js/chart.umd.js"></script>
+  <script type="module" src="/js/app.js"></script>
+</body>
+</html>

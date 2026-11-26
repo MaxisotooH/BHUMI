@@ -1,0 +1,56 @@
+BHUMI · Logística y distribución
+================================
+
+QUÉ HACE BHUMI
+  Control de costos de transporte, indicadores del equipo (preparación, carga, despacho,
+  cumplimiento), clientes y zonas, rutas con Google Maps, kilometraje y mantención de la flota,
+  cubicaje y consolidación de despachos, y un panel para compararlo todo.
+
+PARA ABRIR EL PROGRAMA
+  1. Extrae el .zip (clic derecho -> "Extraer todo...") y abre la carpeta BHUMI.
+  2. Haz doble clic en  "Abrir BHUMI.html".
+  Se abre en tu navegador. No hay que instalar nada ni escribir comandos.
+  Cada archivo "Abrir ..." trae el programa completo adentro: funciona aunque lo muevas de carpeta.
+  Usa Google Chrome o Microsoft Edge. Si se abre con otro navegador,
+  haz clic derecho sobre el archivo -> Abrir con -> Chrome o Edge.
+
+PARA PROBARLO SIN GOOGLE NI DATOS REALES
+  Haz doble clic en  "Abrir DEMO.html".
+  Trae datos de prueba y un mapa simulado. Nada de lo que hagas ahí se guarda.
+
+DÓNDE QUEDAN TUS DATOS
+  Se guardan dentro del navegador, en este computador. No quedan dentro de la carpeta.
+  - Puedes mover, renombrar o copiar la carpeta: tus datos siguen ahí.
+  - Usa siempre el mismo navegador (los datos de Chrome no se ven desde Edge).
+  - Abre BHUMI en una sola pestaña a la vez.
+  - Si limpias los datos de navegación y marcas "Cookies y otros datos de sitios",
+    TUS DATOS SE BORRAN. Por eso, descarga un respaldo cada semana:
+    Configuración -> Respaldo de datos -> "Respaldo completo (.db)".
+    Guárdalo en OneDrive o en un pendrive.
+  - BHUMI te avisa cuando pasan varios días sin respaldo.
+
+PARA ACTUALIZAR A UNA VERSIÓN NUEVA
+  1. Extrae la carpeta BHUMI nueva donde quieras (puede reemplazar a la anterior).
+  2. Haz doble clic en "Abrir BHUMI.html" de la carpeta nueva, con el mismo navegador.
+  Tus datos siguen ahí. Si quieres quedar tranquilo, descarga un respaldo antes.
+
+PARA PASAR LOS DATOS A OTRO COMPUTADOR
+  En el computador de origen: Configuración -> Respaldo de datos -> "Respaldo completo (.db)".
+  En el de destino: Configuración -> Respaldo de datos -> "Elegir archivo de respaldo..." y elige ese archivo.
+
+SI USABAS LA VERSIÓN ANTERIOR
+  - Si ya la abrías con doble clic en este navegador: tus datos siguen ahí y esta versión
+    agrega lo nuevo. Los despachos antiguos quedan sin horas ni resultado por entrega
+    hasta que los anotes, y los productos y vehículos sin medidas hasta que las ingreses.
+  - Si usabas la que necesitaba Node: en Configuración -> Respaldo de datos ->
+    "Elegir archivo de respaldo..." elige el respaldo.json que descargaste de esa versión.
+
+GOOGLE MAPS
+  Configuración -> Google Maps: pega tu API key y presiona "Probar conexión".
+  En Google Cloud, deja la clave sin restricción de sitio web (BHUMI se abre desde un
+  archivo, no desde una dirección de internet) y limítala a estas APIs:
+  Maps JavaScript API, Geocoding API y Routes API. Crea también un presupuesto con alerta de gasto.
+  Para consultar a Google se necesita conexión a internet.
+
+LA CARPETA "codigo-fuente"
+  Es el código del programa. No hace falta para usar BHUMI. Se guarda por si hay que modificarlo.

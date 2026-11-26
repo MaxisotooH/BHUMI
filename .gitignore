@@ -1,0 +1,19 @@
+# Dependencias
+node_modules/
+
+# Salida de "npm run construir" (Abrir BHUMI.html / Abrir DEMO.html)
+dist/
+
+# Base SQLite local del servidor (data/bhumi.db). Ojo: server/data/ SI se versiona.
+/data/
+
+# Respaldos y bases locales
+*.db
+*.db-journal
+respaldo*.json
+
+# Entorno y sistema
+.env
+.env.*
+.DS_Store
+Thumbs.db

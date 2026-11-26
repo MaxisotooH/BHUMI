@@ -1,0 +1,31 @@
+{
+  "name": "bhumi-logistica",
+  "version": "1.0.0",
+  "description": "Sistema de optimización de transporte y distribución para BHUMI",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning server/index.js",
+    "demo": "node --disable-warning=ExperimentalWarning test/servidor-prueba.js 3100",
+    "test": "node --disable-warning=ExperimentalWarning --test test/*.test.js",
+    "test:local": "BHUMI_LOCAL=1 node --disable-warning=ExperimentalWarning --test test/*.test.js",
+    "test:navegador": "BHUMI_LOCAL=1 node --disable-warning=ExperimentalWarning --import ./test/alias-navegador.mjs --test test/*.test.js",
+    "test:wasm": "BHUMI_LOCAL=wasm node --disable-warning=ExperimentalWarning --import ./test/alias-navegador.mjs --test test/*.test.js",
+    "construir": "node navegador/construir.mjs"
+  },
+  "dependencies": {
+    "@fontsource/barlow": "^5.2.0",
+    "@fontsource/barlow-condensed": "^5.2.0",
+    "chart.js": "^4.4.0",
+    "exceljs": "^4.4.0",
+    "express": "^4.21.0",
+    "pdfkit": "^0.15.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "sql.js": "^1.17.0"
+  }
+}
