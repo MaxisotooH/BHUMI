@@ -62,6 +62,8 @@ export async function api(method, url, body) {
     e.code = data?.error?.code;
     e.extra = data?.error?.extra;
     e.status = res.status;
+    // Servidor central: la sesión venció o se cerró desde otro lado. La aplicación muestra el inicio de sesión.
+    if (res.status === 401 && e.code === 'sin_sesion') window.dispatchEvent(new CustomEvent('bhumi:sin-sesion', { detail: e.message }));
     throw e;
   }
   return data;
@@ -86,7 +88,8 @@ export function toast(texto, tipo = 'ok', ms = 4200) {
   cont.appendChild(t);
   setTimeout(() => t.remove(), tipo === 'error' ? Math.max(ms, 7000) : ms);
 }
-export const falla = (e) => toast(e?.message ?? String(e), 'error');
+// Sin sesión no hace falta el aviso: la pantalla de inicio de sesión ya lo explica.
+export const falla = (e) => { if (e?.code !== 'sin_sesion') toast(e?.message ?? String(e), 'error'); };
 
 export function modal({ titulo, cuerpo, ancho = 640, acciones = [], alAbrir, cerrarAlFondo = true }) {
   const raiz = document.getElementById('modales');

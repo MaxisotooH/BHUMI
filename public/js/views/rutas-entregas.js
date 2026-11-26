@@ -71,7 +71,7 @@ export async function pintarEntregas(ctx, root) {
     const kg = elegidas.every((e) => e.peso_kg != null) ? elegidas.reduce((a, e) => a + e.peso_kg, 0) : null;
     pintar(barra, html`<div class="barra-fija"><b>${pluralizar(sel.size, 'entrega seleccionada', 'entregas seleccionadas')}</b>
       <span>${kg != null ? `${num1(kg)} kg · ` : ''}${[...new Set(elegidas.map((e) => e.comuna).filter(Boolean))].join(', ')}</span><span class="espacio"></span>
-      <button class="btn" data-limpiar>Quitar selección</button><button class="btn btn-ambar" data-planificar>Calcular rutas y costos</button></div>`);
+      <button class="btn" data-limpiar>Quitar selección</button>${ctx.estado.usuario?.rol === 'bodega' ? '' : html`<button class="btn btn-ambar" data-planificar>Calcular rutas y costos</button>`}</div>`);
   }
 
   // ---------- Formulario de entrega ----------

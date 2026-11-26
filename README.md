@@ -160,7 +160,7 @@ Cada pantalla es un archivo que exporta una función `async` y recibe `{ root, p
 
 BHUMI también puede funcionar en un servidor para que varios computadores lo usen al mismo tiempo, con Docker, HTTPS automático y respaldo continuo.
 La guía está en [docs/DESPLIEGUE.md](docs/DESPLIEGUE.md) y las variables de entorno en [.env.example](.env.example).
-El inicio de sesión con roles llega en la Fase 2. Hasta entonces, no publiques el servidor en internet sin protección.
+En el servidor cada persona entra con su correo y contraseña, y tiene uno de tres roles: Administrador, Planificador u Operador de bodega. El primer administrador se crea con `npm run crear-admin`, y desde ahí se agregan los demás en **Configuración → Usuarios**. La versión de doble clic no cambia: sigue sin inicio de sesión.
 
 ## Pruebas automáticas
 

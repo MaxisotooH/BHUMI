@@ -16,11 +16,12 @@ export async function pintarDespachos(ctx, root) {
 // ---------- Listado ----------
 async function listado(ctx, root) {
   const { navegar } = ctx;
+  const planifica = ctx.estado.usuario?.rol !== 'bodega'; // bodega no crea rutas
   const f = { desde: '', hasta: '', vehicle_id: '', estado: '' };
   const vehiculos = await get('/vehiculos');
   pintar(root, html`
     <div class="fila entre" style="margin-bottom:12px"><p class="muted" style="margin:0;max-width:70ch">Cada despacho guardado con su ruta, kilómetros, costo y resultado. Ábrelo para registrar los tiempos, marcar las entregas y enviarle la ruta al conductor.</p>
-      <div class="acciones"><a class="btn btn-primario" href="#/rutas?tab=nueva">Nueva ruta</a></div></div>
+      ${planifica ? html`<div class="acciones"><a class="btn btn-primario" href="#/rutas?tab=nueva">Nueva ruta</a></div>` : ''}</div>
     <div class="card"><div class="card-cuerpo fila" style="border-bottom:1px solid var(--linea)">
       <label class="fila" style="gap:6px">Desde <input type="date" id="desde" style="width:auto"></label><label class="fila" style="gap:6px">Hasta <input type="date" id="hasta" style="width:auto"></label>
       <select id="veh" style="max-width:220px" aria-label="Vehículo">${opciones(vehiculos, '', { vacio: 'Todos los vehículos', valor: (v) => v.id, texto: (v) => `${v.marca} ${v.modelo}` })}</select>
@@ -31,7 +32,11 @@ async function listado(ctx, root) {
   async function cargar() {
     const filas = await get(`/despachos${qs(f)}`);
     root.querySelector('#cuenta').textContent = pluralizar(filas.length, 'despacho', 'despachos');
-    if (!filas.length) return pintar(tabla, vacio(Object.values(f).some(Boolean) ? 'No hay despachos con esos filtros' : 'Aún no hay despachos guardados', 'Los despachos se guardan desde Nueva ruta, después de comparar las alternativas.', html`<a class="btn btn-primario" href="#/rutas?tab=nueva">Planificar una ruta</a>`));
+    if (!filas.length) {
+      return pintar(tabla, vacio(Object.values(f).some(Boolean) ? 'No hay despachos con esos filtros' : 'Aún no hay despachos guardados',
+        planifica ? 'Los despachos se guardan desde Nueva ruta, después de comparar las alternativas.' : 'Cuando el planificador guarde un despacho, aparecerá aquí.',
+        planifica ? html`<a class="btn btn-primario" href="#/rutas?tab=nueva">Planificar una ruta</a>` : ''));
+    }
     const validos = filas.filter((t) => t.estado !== 'cancelado');
     const s = (k) => validos.reduce((a, t) => a + (t[k] ?? 0), 0);
     pintar(tabla, html`<div class="tabla-wrap"><table class="tabla-compacta"><thead><tr><th>N°</th><th>Fecha</th><th>Vehículo</th><th>Conductor</th><th>Bodega</th><th class="der">Paradas</th><th class="der">Distancia</th><th class="der">Tiempo</th><th class="der">Total</th><th class="der">$/km</th><th class="der">$/cliente</th><th class="der">Ahorro</th><th>Estado</th></tr></thead><tbody>

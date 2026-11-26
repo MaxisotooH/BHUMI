@@ -8,6 +8,7 @@ import { createGoogle } from './services/google.js';
 import { createPlanner } from './services/planner.js';
 import { createApi } from './api.js';
 import { leerConfig, ErrorConfig } from './config.js';
+import { crearAuth } from './auth.js';
 
 const raiz = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const VERSION = JSON.parse(fs.readFileSync(path.join(raiz, 'package.json'), 'utf8')).version;
@@ -41,7 +42,12 @@ export function crearApp({ dbFile = path.join(raiz, 'data', 'bhumi.db'), fetchIm
     }
   });
 
-  app.use('/api', createApi({ db, google, planner, demo, clavesGoogle }));
+  // Inicio de sesión y permisos por rol: todo /api exige sesión, salvo /api/salud, /api/meta y el propio login.
+  const auth = crearAuth({ db });
+  app.use('/api', auth.publico);
+  app.use('/api', auth.exigirSesion);
+  app.use('/api', auth.privado);
+  app.use('/api', createApi({ db, google, planner, demo, clavesGoogle, autenticacion: true }));
 
   const pub = path.join(raiz, 'public');
   app.use('/vendor/chart.js', express.static(path.join(raiz, 'node_modules', 'chart.js', 'dist')));
@@ -63,6 +69,9 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   }
   for (const a of config.advertencias) console.warn(`ADVERTENCIA: ${a}`);
   const { app, db } = crearApp({ dbFile: config.dbFile, clavesGoogle: config.clavesGoogle, trustProxy: config.trustProxy });
+  if (db.prepare('SELECT COUNT(*) AS n FROM usuarios').get().n === 0) {
+    console.warn('AVISO: todavía no hay usuarios. Crea el primer administrador con:  npm run crear-admin  (en Docker: docker compose exec app npm run crear-admin)');
+  }
   const servidor = app.listen(config.puerto, config.host, () => {
     const local = config.host === '127.0.0.1' || config.host === 'localhost';
     console.log(local

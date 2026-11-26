@@ -78,7 +78,7 @@ const ESTADOS_VEH = ['activo', 'en mantención', 'fuera de servicio'];
 const ROLES = [{ id: 'conductor', nombre: 'Conductor' }, { id: 'preparador', nombre: 'Bodega (preparación y carga)' }];
 
 /** `express` se puede reemplazar por el enrutador local del navegador (modo de doble clic). */
-export function createApi({ db, google, planner, demo = false, express = expressReal, clavesGoogle = null }) {
+export function createApi({ db, google, planner, demo = false, express = expressReal, clavesGoogle = null, autenticacion = false }) {
   const r = express.Router();
 
   // Con clavesGoogle (servidor central) la clave del servidor viene de variables de entorno y nunca sale al navegador:
@@ -107,6 +107,7 @@ export function createApi({ db, google, planner, demo = false, express = express
       max_paradas: MAX_PARADAS,
       demo,
       google_por_servidor: !!clavesGoogle,
+      autenticacion, // servidor central: la interfaz pide iniciar sesión
     });
   });
 

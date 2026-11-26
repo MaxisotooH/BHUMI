@@ -14,7 +14,8 @@
     "test:local": "BHUMI_LOCAL=1 node --disable-warning=ExperimentalWarning --test test/*.test.js",
     "test:navegador": "BHUMI_LOCAL=1 node --disable-warning=ExperimentalWarning --import ./test/alias-navegador.mjs --test test/*.test.js",
     "test:wasm": "BHUMI_LOCAL=wasm node --disable-warning=ExperimentalWarning --import ./test/alias-navegador.mjs --test test/*.test.js",
-    "construir": "node navegador/construir.mjs"
+    "construir": "node navegador/construir.mjs",
+    "crear-admin": "node --disable-warning=ExperimentalWarning server/crear-admin.js"
   },
   "dependencies": {
     "@fontsource/barlow": "^5.2.0",
@@ -27,5 +28,8 @@
   "devDependencies": {
     "esbuild": "^0.28.2",
     "sql.js": "^1.17.0"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true
   }
 }
