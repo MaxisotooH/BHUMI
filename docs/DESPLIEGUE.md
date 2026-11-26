@@ -77,14 +77,23 @@ La base queda intacta en el volumen `datos`, y las columnas nuevas se agregan so
 ## Respaldos
 
 - **Respaldo continuo (Litestream):** cada cambio se copia al bucket en segundos.
-  Para recuperar la base en un servidor nuevo, ejecuta esto antes de levantar `app`:
+
+  **Recuperar la base en un servidor nuevo.** Hazlo antes de levantar `app`. `--no-deps` evita que BHUMI arranque primero y cree una base vacía: si eso pasa, `restore` no escribe encima.
 
   ```bash
-  docker compose --profile respaldo run --rm litestream restore -if-replica-exists /datos/bhumi.db
+  docker compose --profile respaldo run --rm --no-deps litestream restore -if-replica-exists /datos/bhumi.db
   docker compose --profile respaldo up -d
   ```
 
-  Si necesitas volver a un momento anterior, agrega `-timestamp 2026-11-20T15:00:00Z` al comando `restore`.
+  **Volver a un momento anterior.** Sirve, por ejemplo, para deshacer una restauración equivocada. Primero detén BHUMI y aparta la base actual; no se borra, queda en `/datos/anterior-<fecha>`. Después restaura con la hora deseada, en UTC:
+
+  ```bash
+  docker compose --profile respaldo stop app litestream
+  docker compose --profile respaldo run --rm --no-deps --entrypoint sh litestream -c \
+    'd=/datos/anterior-$(date +%Y%m%d-%H%M%S) && mkdir -p "$d" && mv /datos/bhumi.db* /datos/.bhumi.db-litestream "$d"/ 2>/dev/null; ls "$d"'
+  docker compose --profile respaldo run --rm --no-deps litestream restore -timestamp 2026-11-20T15:00:00Z /datos/bhumi.db
+  docker compose --profile respaldo up -d
+  ```
 - **Respaldo manual:** en **Configuración → Respaldo de datos** se puede descargar el `.db` o el `.json` en cualquier momento.
 
 ## Contraseña temporal mientras no exista el login (Fase 1)

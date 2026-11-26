@@ -23,7 +23,6 @@ if (major < 22 || (major === 22 && minor < 13)) {
  *                      Sin ellas, se usa la clave guardada en Configuración, como en la versión de un solo equipo.
  */
 export function crearApp({ dbFile = path.join(raiz, 'data', 'bhumi.db'), fetchImpl, demo = false, clavesGoogle = null, trustProxy = false } = {}) {
-  if (dbFile !== ':memory:') fs.mkdirSync(path.dirname(dbFile), { recursive: true });
   const db = openDb(dbFile);
   const google = createGoogle({ getKey: () => clavesGoogle?.servidor ?? getSettings(db).google_api_key, fetchImpl });
   const planner = createPlanner({ db, google });
@@ -62,6 +61,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     console.error(`\nNo se pudo iniciar BHUMI: ${e.message}\n`);
     process.exit(1);
   }
+  for (const a of config.advertencias) console.warn(`ADVERTENCIA: ${a}`);
   const { app, db } = crearApp({ dbFile: config.dbFile, clavesGoogle: config.clavesGoogle, trustProxy: config.trustProxy });
   const servidor = app.listen(config.puerto, config.host, () => {
     const local = config.host === '127.0.0.1' || config.host === 'localhost';

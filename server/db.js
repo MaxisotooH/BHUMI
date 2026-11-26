@@ -296,8 +296,12 @@ export function limpiar(obj) {
 
 /** `file` es una ruta de archivo, ':memory:' o (solo en el navegador) los bytes de una base ya guardada. */
 export function openDb(file) {
-  if (typeof file === 'string' && file !== ':memory:') fs.mkdirSync(path.dirname(file), { recursive: true });
+  const enDisco = typeof file === 'string' && file !== ':memory:';
+  if (enDisco) fs.mkdirSync(path.dirname(file), { recursive: true });
   const db = new DatabaseSync(file);
+  // Otro proceso (Litestream, al consolidar el respaldo) puede tomar la base por un instante:
+  // en vez de fallar con "database is locked", la escritura espera hasta 5 segundos.
+  if (enDisco) db.exec('PRAGMA busy_timeout = 5000;');
   prepararDb(db);
   return db;
 }

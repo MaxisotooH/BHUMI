@@ -40,6 +40,9 @@ services:
     image: litestream/litestream:0.3.13
     profiles: ["respaldo"]
     restart: unless-stopped
+    # Mismo usuario que BHUMI (node, uid 1000): si Litestream crea los archivos -wal o -shm,
+    # la app los puede seguir escribiendo.
+    user: "1000:1000"
     depends_on:
       app:
         condition: service_healthy

@@ -25,6 +25,27 @@ test('config: lee HOST, PORT, DB_FILE, TRUST_PROXY y las dos claves de Google', 
   assert.deepEqual(c.clavesGoogle, { servidor: 'srv', navegador: 'nav' });
 });
 
+test('config: advierte si el servidor está abierto a otros equipos sin las claves de Google en variables de entorno', () => {
+  assert.deepEqual(leerConfig({}).advertencias, []);
+  assert.deepEqual(leerConfig({ HOST: '0.0.0.0', GOOGLE_SERVER_KEY: 'srv', GOOGLE_BROWSER_KEY: 'nav' }).advertencias, []);
+  const [a] = leerConfig({ HOST: '0.0.0.0' }).advertencias;
+  assert.match(a, /GOOGLE_SERVER_KEY/);
+});
+
+test('openDb: en disco espera hasta 5 s si otro proceso tiene la base tomada', async () => {
+  const fs = await import('node:fs');
+  const os = await import('node:os');
+  const { openDb } = await import('../server/db.js');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bhumi-'));
+  const db = openDb(path.join(dir, 'bhumi.db'));
+  try {
+    assert.equal(db.prepare('PRAGMA busy_timeout').get().timeout, 5000);
+  } finally {
+    db.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('config: rechaza un puerto inválido o una sola clave de Google', () => {
   assert.throws(() => leerConfig({ PORT: 'abc' }), ErrorConfig);
   assert.throws(() => leerConfig({ PORT: '70000' }), ErrorConfig);

@@ -21,9 +21,19 @@ export function leerConfig(env = process.env, raiz = process.cwd()) {
     );
   }
 
+  const host = texto('HOST') || '127.0.0.1';
+  const advertencias = [];
+  if (!['127.0.0.1', 'localhost', '::1'].includes(host) && !servidor) {
+    advertencias.push(
+      `BHUMI atiende en ${host} (otros equipos pueden entrar) pero GOOGLE_SERVER_KEY y GOOGLE_BROWSER_KEY no están definidas. ` +
+        'La clave que se pegue en Configuración se enviará al navegador de cada usuario. Define las dos claves en .env (ver docs/DESPLIEGUE.md).'
+    );
+  }
+
   const trust = texto('TRUST_PROXY');
   return {
-    host: texto('HOST') || '127.0.0.1',
+    host,
+    advertencias,
     puerto,
     dbFile: texto('DB_FILE') ? path.resolve(raiz, texto('DB_FILE')) : path.join(raiz, 'data', 'bhumi.db'),
     // Detrás de Caddy u otro proxy: permite leer la IP real del cliente y el protocolo https.
