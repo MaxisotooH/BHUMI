@@ -15,5 +15,6 @@ respaldo*.json
 # Entorno y sistema
 .env
 .env.*
+!.env.example
 .DS_Store
 Thumbs.db

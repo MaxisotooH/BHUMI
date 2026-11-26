@@ -78,8 +78,19 @@ const ESTADOS_VEH = ['activo', 'en mantención', 'fuera de servicio'];
 const ROLES = [{ id: 'conductor', nombre: 'Conductor' }, { id: 'preparador', nombre: 'Bodega (preparación y carga)' }];
 
 /** `express` se puede reemplazar por el enrutador local del navegador (modo de doble clic). */
-export function createApi({ db, google, planner, demo = false, express = expressReal }) {
+export function createApi({ db, google, planner, demo = false, express = expressReal, clavesGoogle = null }) {
   const r = express.Router();
+
+  // Con clavesGoogle (servidor central) la clave del servidor viene de variables de entorno y nunca sale al navegador:
+  // la interfaz recibe solo la clave del mapa, restringida al dominio. Sin ellas, se usa la clave guardada en Configuración.
+  const ajustes = () => {
+    const s = getSettings(db);
+    return clavesGoogle ? { ...s, google_api_key: clavesGoogle.servidor } : s;
+  };
+  const ajustesPublicos = () => {
+    const s = getSettings(db);
+    return clavesGoogle ? { ...s, google_api_key: clavesGoogle.navegador } : s;
+  };
 
   // ---------- Meta, configuración y estado de la instalación ----------
   r.get('/meta', (req, res) => {
@@ -95,10 +106,11 @@ export function createApi({ db, google, planner, demo = false, express = express
       roles: ROLES,
       max_paradas: MAX_PARADAS,
       demo,
+      google_por_servidor: !!clavesGoogle,
     });
   });
 
-  r.get('/settings', (req, res) => res.json(getSettings(db)));
+  r.get('/settings', (req, res) => res.json(ajustesPublicos()));
   r.put('/settings', wrap(async (req, res) => {
     const antes = getSettings(db);
     const patch = {};
@@ -106,24 +118,24 @@ export function createApi({ db, google, planner, demo = false, express = express
     for (const k of ['costo_hora_conductor', 'jornada_horas', 'recargo_horas_extra_pct', 'tiempo_servicio_min', 'meta_carga_min', 'meta_preparacion_min', 'meta_cumplimiento_pct', 'meta_utilizacion_pct', 'alerta_mantencion_pct', 'radio_cercania_km', 'cache_horas', 'peso_distancia', 'peso_tiempo', 'peso_costo', 'umbral_consumo_pct', 'deposito_lat', 'deposito_lng']) {
       if (k in patch) { const v = n(patch[k]); patch[k] = v == null ? '' : v; }
     }
-    if ('google_api_key' in patch) patch.google_api_key = String(patch.google_api_key ?? '').trim();
+    if (clavesGoogle) delete patch.google_api_key; // la definen las variables de entorno del servidor
+    else if ('google_api_key' in patch) patch.google_api_key = String(patch.google_api_key ?? '').trim();
     const cambioDir = ['deposito_direccion', 'deposito_comuna', 'deposito_region'].some((k) => k in patch && String(patch[k]) !== String(antes[k]));
     if (cambioDir && !('deposito_lat' in patch)) { patch.deposito_lat = ''; patch.deposito_lng = ''; }
     setSettings(db, patch);
-    let s = getSettings(db);
+    const s = ajustes();
     // Con la clave ya guardada, ubica la base de inmediato para que el mapa y las rutas queden listos.
     const sinCoord = num(s.deposito_lat) == null || num(s.deposito_lng) == null;
     if (s.google_api_key && s.deposito_direccion && sinCoord) {
       try {
         const g = await google.geocode({ direccion: s.deposito_direccion, comuna: s.deposito_comuna, region: s.deposito_region });
         setSettings(db, { deposito_lat: g.lat, deposito_lng: g.lng });
-        s = getSettings(db);
       } catch { /* se vuelve a intentar al planificar o desde Configuración */ }
     }
-    res.json(s);
+    res.json(ajustesPublicos());
   }));
   r.post('/settings/probar-google', wrap(async (req, res) => {
-    const s = getSettings(db);
+    const s = ajustes();
     if (!s.google_api_key) throw new GoogleError('sin_clave', 'Primero pega tu API key de Google Maps y guarda.');
     const dir = [s.deposito_direccion, s.deposito_comuna, 'Chile'].filter(Boolean).join(', ') || 'Santiago, Chile';
     res.json(await google.probar(dir));
@@ -136,7 +148,7 @@ export function createApi({ db, google, planner, demo = false, express = express
   }));
 
   r.get('/setup', (req, res) => {
-    const s = getSettings(db);
+    const s = ajustes();
     const vehs = db.prepare("SELECT * FROM vehicles WHERE activo = 1 AND estado = 'activo'").all();
     const items = [];
     const add = (id, titulo, ok, detalle, href, opcional = false) => items.push({ id, titulo, estado: ok ? 'ok' : opcional ? 'opcional' : 'falta', detalle, href });

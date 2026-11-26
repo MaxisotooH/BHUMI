@@ -156,6 +156,12 @@ Los datos del navegador no se borran al reconstruir.
 Reglas del proyecto que conviene respetar: solo datos reales (si falta un dato, el indicador queda en blanco y se explica qué falta), solo Google Maps para rutas, y la interfaz usa JavaScript simple sin compilación.
 Cada pantalla es un archivo que exporta una función `async` y recibe `{ root, params, estado, navegar, refrescarEstado }`; se pinta con la plantilla `html`...`` de `lib.js`, que protege el texto automáticamente.
 
+## Servidor central (varios equipos)
+
+BHUMI también puede funcionar en un servidor para que varios computadores lo usen al mismo tiempo, con Docker, HTTPS automático y respaldo continuo.
+La guía está en [docs/DESPLIEGUE.md](docs/DESPLIEGUE.md) y las variables de entorno en [.env.example](.env.example).
+El inicio de sesión con roles llega en la Fase 2. Hasta entonces, no publiques el servidor en internet sin protección.
+
 ## Pruebas automáticas
 
 ```bash
