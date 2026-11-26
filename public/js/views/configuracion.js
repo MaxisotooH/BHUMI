@@ -4,15 +4,20 @@ import { pestanas, activarPestanas } from '../componentes.js';
 
 const TABS = [
   ['base', 'Punto de partida'], ['google', 'Google Maps'], ['combustible', 'Combustible'], ['costos', 'Costos operacionales'],
-  ['metas', 'Objetivos y metas'], ['personal', 'Personal'], ['respaldo', 'Respaldo de datos'],
+  ['metas', 'Objetivos y metas'], ['personal', 'Personal'], ['respaldo', 'Respaldo de datos'], ['usuarios', 'Usuarios'],
 ];
+// Pestañas que solo ve Admin. "Usuarios" además solo existe en el servidor central (con inicio de sesión).
+const SOLO_ADMIN = new Set(['base', 'google', 'respaldo', 'usuarios']);
 
 export default async function (ctx) {
-  const { root, params, navegar } = ctx;
-  const tab = TABS.some(([id]) => id === params.get('tab')) ? params.get('tab') : 'base';
-  pintar(root, html`${pestanas('configuracion', TABS, tab)}<div id="tab-contenido"></div>`);
+  const { root, params, navegar, estado } = ctx;
+  const u = estado.usuario;
+  const tabs = TABS.filter(([id]) => (id !== 'usuarios' || u) && (!u || u.rol === 'admin' || !SOLO_ADMIN.has(id)));
+  const tab = tabs.some(([id]) => id === params.get('tab')) ? params.get('tab') : tabs[0][0];
+  pintar(root, html`${pestanas('configuracion', tabs, tab)}<div id="tab-contenido"></div>`);
   activarPestanas(root, navegar);
   const panel = root.querySelector('#tab-contenido');
+  if (tab === 'usuarios') return (await import('./configuracion-usuarios.js')).pintarUsuarios(panel, ctx);
   await ({ base, google, combustible, costos, metas, personal, respaldo })[tab](panel, ctx);
 }
 

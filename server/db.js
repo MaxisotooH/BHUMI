@@ -280,6 +280,42 @@ CREATE TABLE IF NOT EXISTS route_cache (
   fetched_at INTEGER NOT NULL,
   PRIMARY KEY (o, d, bucket)
 );
+
+-- Usuarios del servidor central (la versión de doble clic no los usa). No entran en el respaldo JSON.
+CREATE TABLE IF NOT EXISTS usuarios (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  email TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  nombre TEXT NOT NULL,
+  rol TEXT NOT NULL CHECK (rol IN ('admin', 'planificador', 'bodega')),
+  clave_hash TEXT NOT NULL,
+  activo INTEGER NOT NULL DEFAULT 1,
+  creado_en TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  ultimo_acceso TEXT
+);
+
+-- Sesiones: se guarda solo el hash SHA-256 del token; el token vive en una cookie httpOnly.
+CREATE TABLE IF NOT EXISTS sesiones (
+  id TEXT PRIMARY KEY,
+  usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+  creada_en INTEGER NOT NULL,
+  ultimo_uso INTEGER NOT NULL,
+  ip TEXT,
+  agente TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_sesiones_usuario ON sesiones(usuario_id);
+
+-- Quién cambió qué: cada escritura en la API, más los inicios de sesión.
+CREATE TABLE IF NOT EXISTS auditoria (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  usuario_id INTEGER REFERENCES usuarios(id),
+  accion TEXT NOT NULL,
+  ruta TEXT,
+  estado INTEGER,
+  ip TEXT,
+  detalle TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_auditoria_ts ON auditoria(ts);
 `;
 
 // Convierte valores a algo que SQLite acepta (undefined → null, boolean → 0/1).

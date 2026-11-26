@@ -1,6 +1,7 @@
 // Arranque de la interfaz: menú, enrutador y estado compartido.
-import { html, raw, pintar, get, clp, destruirGraficos, falla, esc, descargar } from './lib.js';
+import { html, raw, pintar, get, clp, destruirGraficos, falla, esc, descargar, alHacer } from './lib.js';
 import { activarDemo } from './maps.js';
+import { mostrarLogin, fichaUsuario, abrirMenuUsuario, veSeccion, seccionInicial } from './sesion.js';
 
 const icono = (d) => `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
 const SECCIONES = [
@@ -14,7 +15,9 @@ const SECCIONES = [
   { id: 'configuracion', titulo: 'Configuración', corto: 'Google Maps, base, combustible, metas, personal y respaldo', icono: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>' },
 ];
 
-export const estado = { settings: null, meta: null, setup: null };
+// `usuario` existe solo en el servidor central (con inicio de sesión); en la versión de doble clic queda en null.
+export const estado = { settings: null, meta: null, setup: null, usuario: null };
+const seccionesVisibles = () => SECCIONES.filter((s) => veSeccion(estado.usuario, s.id));
 let limpiezaVista = null;
 let tokenNav = 0;
 
@@ -28,27 +31,36 @@ export async function refrescarEstado() {
 
 function pintarMarco() {
   const actual = ruta().id;
-  pintar(document.getElementById('nav'), html`${SECCIONES.map((s) => html`<a class="nav-item" href="#/${s.id}" ${s.id === actual ? raw('aria-current="page"') : ''}>${raw(icono(s.icono))}<span>${s.titulo}</span></a>`)}`);
+  pintar(document.getElementById('nav'), html`${seccionesVisibles().map((s) => html`<a class="nav-item" href="#/${s.id}" ${s.id === actual ? raw('aria-current="page"') : ''}>${raw(icono(s.icono))}<span>${s.titulo}</span></a>`)}`);
   const s = estado.settings;
+  const u = estado.usuario;
+  // Los avisos llevan a Configuración solo si el usuario puede abrirla (y, para Google y la base, solo Admin).
+  const enlace = (href, cls, titulo, contenido, soloAdmin = false) => (veSeccion(u, 'configuracion') && (!soloAdmin || !u || u.rol === 'admin')
+    ? html`<a class="${cls}" href="${href}" title="${titulo}">${contenido}</a>`
+    : html`<span class="${cls}" title="${titulo}">${contenido}</span>`);
   const bencina = estado.precios?.vigentes?.find((p) => p.combustible === 'Bencina' && p.precio != null) ?? estado.precios?.vigentes?.find((p) => p.precio != null);
   const chips = [];
   if (estado.meta?.demo) chips.push(html`<span class="dato-chip alerta" title="Datos de prueba, mapa simulado y distancias aproximadas. Nada se guarda al cerrar el programa.">Modo demostración</span>`);
   chips.push(bencina
-    ? html`<a class="dato-chip" href="#/configuracion?tab=combustible" title="Precio vigente desde ${bencina.vigente_desde}">${bencina.combustible} <b class="num">${clp(bencina.precio)}/L</b></a>`
-    : html`<a class="dato-chip alerta" href="#/configuracion?tab=combustible">Falta el precio del combustible</a>`);
-  chips.push(html`<a class="dato-chip" href="#/configuracion?tab=base" title="Punto de partida de las rutas">Base <b>${s.deposito_comuna || 'sin definir'}</b></a>`);
-  if (!s.google_api_key) chips.push(html`<a class="dato-chip alerta" href="#/configuracion?tab=google">Falta API key de Google</a>`);
+    ? enlace('#/configuracion?tab=combustible', 'dato-chip', `Precio vigente desde ${bencina.vigente_desde}`, html`${bencina.combustible} <b class="num">${clp(bencina.precio)}/L</b>`)
+    : enlace('#/configuracion?tab=combustible', 'dato-chip alerta', '', 'Falta el precio del combustible'));
+  chips.push(enlace('#/configuracion?tab=base', 'dato-chip', 'Punto de partida de las rutas', html`Base <b>${s.deposito_comuna || 'sin definir'}</b>`, true));
+  if (!s.google_api_key) chips.push(enlace('#/configuracion?tab=google', 'dato-chip alerta', '', 'Falta API key de Google', true));
+  if (u) chips.push(fichaUsuario(u));
   pintar(document.getElementById('topbar-datos'), html`${chips}`);
   const p = estado.setup?.pendientes ?? 0;
-  pintar(document.getElementById('sidebar-pie'), p
-    ? html`<a href="#/panel" style="color:#fff">Faltan <b>${p}</b> ${p === 1 ? 'dato' : 'datos'} para calcular costos reales</a>`
-    : html`Configuración al día`);
+  pintar(document.getElementById('sidebar-pie'), !veSeccion(u, 'panel')
+    ? html`${u.nombre}`
+    : p
+      ? html`<a href="#/panel" style="color:#fff">Faltan <b>${p}</b> ${p === 1 ? 'dato' : 'datos'} para calcular costos reales</a>`
+      : html`Configuración al día`);
 }
 
 function ruta() {
-  const h = location.hash.replace(/^#\/?/, '') || 'panel';
+  const inicial = seccionInicial(estado.usuario);
+  const h = location.hash.replace(/^#\/?/, '') || inicial;
   const [id, query = ''] = h.split('?');
-  return { id: SECCIONES.some((s) => s.id === id) ? id : 'panel', params: new URLSearchParams(query) };
+  return seccionesVisibles().some((s) => s.id === id) ? { id, params: new URLSearchParams(query) } : { id: inicial, params: new URLSearchParams() };
 }
 
 export function navegar(hash) { location.hash = hash; }
@@ -111,6 +123,17 @@ async function iniciar() {
   try {
     estado.meta = await get('/meta');
     activarDemo(estado.meta.demo);
+    if (estado.meta.autenticacion) {
+      // Servidor central: sin sesión se muestra el inicio de sesión; si la sesión vence después, también.
+      window.addEventListener('bhumi:sin-sesion', (e) => mostrarLogin(e.detail));
+      try {
+        estado.usuario = (await get('/auth/yo')).usuario;
+      } catch (e) {
+        if (e.status === 401) return mostrarLogin();
+        throw e;
+      }
+      alHacer(document.getElementById('topbar-datos'), 'click', '[data-menu-usuario]', () => abrirMenuUsuario(estado.usuario));
+    }
     await refrescarEstado();
     avisoRespaldo().catch(() => {});
   } catch (e) {

@@ -8,10 +8,13 @@ import { pintarEntregas } from './rutas-entregas.js';
 const TABS = [['nueva', 'Nueva ruta'], ['despachos', 'Despachos'], ['entregas', 'Entregas']];
 
 export default async function (ctx) {
-  const { root, params, navegar } = ctx;
+  const { root, params, navegar, estado } = ctx;
+  // Bodega no planifica rutas: trabaja con los despachos y las entregas del día.
+  const bodega = estado.usuario?.rol === 'bodega';
+  const tabs = bodega ? TABS.filter(([id]) => id !== 'nueva') : TABS;
   const pedida = params.get('tab');
-  const tab = TABS.some(([id]) => id === pedida) ? pedida : params.get('trip') ? 'despachos' : 'nueva';
-  pintar(root, html`${pestanas('rutas', TABS, tab)}<div id="tab-contenido"><div class="cargando"><span class="spinner"></span></div></div>`);
+  const tab = tabs.some(([id]) => id === pedida) ? pedida : params.get('trip') || bodega ? 'despachos' : 'nueva';
+  pintar(root, html`${pestanas('rutas', tabs, tab)}<div id="tab-contenido"><div class="cargando"><span class="spinner"></span></div></div>`);
   activarPestanas(root, navegar);
   const cont = root.querySelector('#tab-contenido');
   try {

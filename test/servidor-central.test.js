@@ -3,9 +3,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { leerConfig, ErrorConfig } from '../server/config.js';
-import { crearApp } from '../server/index.js';
 import { crearFakeGoogle } from './fake-google.js';
-import { MODO_LOCAL } from './helpers.js';
+import { MODO_LOCAL, iniciar } from './helpers.js';
 
 test('config: sin variables queda como antes (solo este equipo, puerto 3000, data/bhumi.db)', () => {
   const c = leerConfig({}, '/app');
@@ -56,21 +55,18 @@ test('config: rechaza un puerto inválido o una sola clave de Google', () => {
 // Lo que sigue usa el servidor HTTP real (Express); el enrutador del navegador no tiene /api/salud.
 const http = { skip: MODO_LOCAL ? 'solo aplica al servidor HTTP' : false };
 
+/** Servidor HTTP con sesión de administrador y un Google simulado que anota con qué clave se le consulta. */
 async function levantar(opciones) {
   const fake = crearFakeGoogle();
   const clavesUsadas = [];
-  const fetchImpl = (url, opts = {}) => {
-    clavesUsadas.push(opts.headers?.['X-Goog-Api-Key'] ?? new URL(url).searchParams.get('key'));
-    return fake.fetchImpl(url, opts);
+  const espia = {
+    ...fake,
+    fetchImpl: (url, opts = {}) => {
+      clavesUsadas.push(opts.headers?.['X-Goog-Api-Key'] ?? new URL(url).searchParams.get('key'));
+      return fake.fetchImpl(url, opts);
+    },
   };
-  const { app, db } = crearApp({ dbFile: ':memory:', fetchImpl, ...opciones });
-  const server = await new Promise((ok) => { const s = app.listen(0, '127.0.0.1', () => ok(s)); });
-  const base = `http://127.0.0.1:${server.address().port}/api`;
-  const call = async (method, ruta, body) => {
-    const res = await fetch(base + ruta, { method, headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined });
-    return { status: res.status, data: await res.json() };
-  };
-  return { call, db, clavesUsadas, cerrar: () => server.close() };
+  return { ...(await iniciar({ fake: espia, ...opciones })), clavesUsadas };
 }
 
 test('salud: responde ok con la versión mientras la base funciona', http, async () => {

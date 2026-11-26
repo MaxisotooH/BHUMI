@@ -1,11 +1,6 @@
 # Despliegue del servidor central de BHUMI
 
-Este documento explica cómo dejar BHUMI en un servidor para que varios equipos lo usen a la vez.
-Corresponde a la **Fase 1** del plan de migración a multiusuario.
-
-> **Importante: todavía no hay inicio de sesión.** El login con usuarios y roles llega en la Fase 2.
-> Hasta entonces, **no publiques BHUMI en internet sin protección**: cualquiera con la dirección podría ver y cambiar los datos.
-> Para probar la Fase 1, usa el servidor en la red interna de la oficina o activa la contraseña temporal de Caddy (ver más abajo).
+Este documento explica cómo dejar BHUMI en un servidor para que varios equipos lo usen a la vez, cada persona con su usuario y su rol.
 
 ## Qué se levanta
 
@@ -56,12 +51,40 @@ docker compose ps                           # app debe aparecer como "healthy"
 curl https://bhumi.tuempresa.cl/api/salud   # {"ok":true,"version":"…"}
 ```
 
+## Primer administrador
+
+Recién instalado, BHUMI no tiene usuarios y nadie puede entrar; tampoco se pueden crear desde la página, para que un desconocido no se adueñe del sistema. El primer administrador se crea en el servidor (pide la contraseña sin mostrarla, mínimo 10 caracteres):
+
+```bash
+docker compose exec app npm run crear-admin -- --email ana@tuempresa.cl --nombre "Ana Pérez"
+```
+
+Desde ahí, el administrador crea al resto en **Configuración → Usuarios**.
+
+| Rol | Qué puede hacer |
+|---|---|
+| Administrador | Todo, incluidos usuarios, Google, punto de partida y respaldo. |
+| Planificador | Rutas, clientes, flota, costos, KPI, combustible, metas y personal. |
+| Operador de bodega | Despachos y entregas del día, tiempos, km y cargas de combustible. No entra al Panel, Control de costos, KPI ni Configuración, y no planifica, cancela ni elimina despachos. (Por ahora sí ve el costo estimado dentro de cada despacho.) |
+
+Los permisos se revisan en el servidor en cada solicitud. Cada escritura queda registrada (quién, qué, cuándo y desde qué IP) en **Configuración → Usuarios → Actividad reciente**.
+
+**Seguridad de las sesiones:** la sesión vence tras 12 horas sin uso y, en cualquier caso, a los 7 días. Tras 5 intentos fallidos con un correo desde una misma IP, ese correo queda bloqueado 15 minutos en esa IP. Los compañeros de la misma oficina pueden seguir entrando. Si una IP acumula 50 fallos, entre todos los correos, se bloquea completa por 15 minutos. Desactivar a un usuario o cambiarle la contraseña cierra sus sesiones de inmediato.
+
+**Si un administrador olvida su contraseña**, otro administrador le asigna una nueva desde **Configuración → Usuarios**. Si no queda ninguno que pueda entrar:
+
+```bash
+docker compose exec app npm run crear-admin -- --email ana@tuempresa.cl --restablecer
+```
+
 ## Pasar los datos actuales al servidor
 
 Los datos de la versión de doble clic viven en el navegador del computador donde se usaba. En el servidor solo se puede restaurar el respaldo en **JSON**:
 
 1. En el computador donde está BHUMI hoy, abre `Abrir BHUMI.html` y ve a **Configuración → Respaldo de datos → Datos en JSON**.
-2. En el servidor nuevo, entra a BHUMI y ve a **Configuración → Respaldo de datos → Elegir archivo de respaldo…**. Elige ese archivo.
+2. En el servidor nuevo, entra a BHUMI como administrador y ve a **Configuración → Respaldo de datos → Elegir archivo de respaldo…**. Elige ese archivo.
+
+Restaurar reemplaza todos los datos de trabajo (clientes, flota, despachos, gastos, etc.), pero **no** toca los usuarios ni la auditoría: el JSON no los incluye.
 
 El JSON no incluye la API key de Google, y no hace falta: en el servidor la definen las variables de entorno.
 
@@ -109,25 +132,9 @@ La base queda intacta en el volumen `datos`, y las columnas nuevas se agregan so
     'litestream restore -timestamp 2026-11-20T15:00:00Z /datos/bhumi.db && chown -R 1000:1000 /datos'
   docker compose --profile respaldo up -d
   ```
-- **Respaldo manual:** en **Configuración → Respaldo de datos** se puede descargar el `.db` o el `.json` en cualquier momento.
-
-## Contraseña temporal mientras no exista el login (Fase 1)
-
-Para no dejar BHUMI abierto en internet antes de la Fase 2, puedes pedir usuario y contraseña desde Caddy:
-
-```bash
-docker compose exec caddy caddy hash-password --plaintext 'una-clave-larga'
-```
-
-Agrega esto dentro del bloque del dominio en `deploy/Caddyfile` (con el hash que entregó el comando) y reinicia Caddy con `docker compose restart caddy`:
-
-```
-basic_auth {
-	bhumi <hash>
-}
-```
-
-Quita ese bloque cuando llegue el inicio de sesión de la Fase 2.
+- **Respaldo manual (solo Administrador):** en **Configuración → Respaldo de datos** se puede descargar el `.db` o el `.json` en cualquier momento.
+  - El `.json` trae los datos de trabajo, sin usuarios.
+  - El `.db` es la base completa: incluye los usuarios con sus contraseñas cifradas (scrypt, nunca en texto plano) y el registro de actividad. Guárdalo en un lugar privado.
 
 ## Sin Docker
 

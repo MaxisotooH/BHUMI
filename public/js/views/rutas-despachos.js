@@ -16,11 +16,12 @@ export async function pintarDespachos(ctx, root) {
 // ---------- Listado ----------
 async function listado(ctx, root) {
   const { navegar } = ctx;
+  const planifica = ctx.estado.usuario?.rol !== 'bodega'; // bodega no crea rutas
   const f = { desde: '', hasta: '', vehicle_id: '', estado: '' };
   const vehiculos = await get('/vehiculos');
   pintar(root, html`
     <div class="fila entre" style="margin-bottom:12px"><p class="muted" style="margin:0;max-width:70ch">Cada despacho guardado con su ruta, kilómetros, costo y resultado. Ábrelo para registrar los tiempos, marcar las entregas y enviarle la ruta al conductor.</p>
-      <div class="acciones"><a class="btn btn-primario" href="#/rutas?tab=nueva">Nueva ruta</a></div></div>
+      ${planifica ? html`<div class="acciones"><a class="btn btn-primario" href="#/rutas?tab=nueva">Nueva ruta</a></div>` : ''}</div>
     <div class="card"><div class="card-cuerpo fila" style="border-bottom:1px solid var(--linea)">
       <label class="fila" style="gap:6px">Desde <input type="date" id="desde" style="width:auto"></label><label class="fila" style="gap:6px">Hasta <input type="date" id="hasta" style="width:auto"></label>
       <select id="veh" style="max-width:220px" aria-label="Vehículo">${opciones(vehiculos, '', { vacio: 'Todos los vehículos', valor: (v) => v.id, texto: (v) => `${v.marca} ${v.modelo}` })}</select>
@@ -31,7 +32,11 @@ async function listado(ctx, root) {
   async function cargar() {
     const filas = await get(`/despachos${qs(f)}`);
     root.querySelector('#cuenta').textContent = pluralizar(filas.length, 'despacho', 'despachos');
-    if (!filas.length) return pintar(tabla, vacio(Object.values(f).some(Boolean) ? 'No hay despachos con esos filtros' : 'Aún no hay despachos guardados', 'Los despachos se guardan desde Nueva ruta, después de comparar las alternativas.', html`<a class="btn btn-primario" href="#/rutas?tab=nueva">Planificar una ruta</a>`));
+    if (!filas.length) {
+      return pintar(tabla, vacio(Object.values(f).some(Boolean) ? 'No hay despachos con esos filtros' : 'Aún no hay despachos guardados',
+        planifica ? 'Los despachos se guardan desde Nueva ruta, después de comparar las alternativas.' : 'Cuando el planificador guarde un despacho, aparecerá aquí.',
+        planifica ? html`<a class="btn btn-primario" href="#/rutas?tab=nueva">Planificar una ruta</a>` : ''));
+    }
     const validos = filas.filter((t) => t.estado !== 'cancelado');
     const s = (k) => validos.reduce((a, t) => a + (t[k] ?? 0), 0);
     pintar(tabla, html`<div class="tabla-wrap"><table class="tabla-compacta"><thead><tr><th>N°</th><th>Fecha</th><th>Vehículo</th><th>Conductor</th><th>Bodega</th><th class="der">Paradas</th><th class="der">Distancia</th><th class="der">Tiempo</th><th class="der">Total</th><th class="der">$/km</th><th class="der">$/cliente</th><th class="der">Ahorro</th><th>Estado</th></tr></thead><tbody>
@@ -83,6 +88,7 @@ async function detalle(ctx, root, id) {
   const color = t.alternativa && COLORES_RUTA[t.alternativa] ? COLORES_RUTA[t.alternativa] : COLORES_RUTA.MANUAL;
   const clase = { A: 'ruta-a', B: 'ruta-b', C: 'ruta-c', D: 'ruta-d' }[t.alternativa] ?? 'ruta-manual';
   const abierto = !['completado', 'cancelado'].includes(t.estado);
+  const bodega = ctx.estado.usuario?.rol === 'bodega'; // registra el despacho, pero no lo cancela, elimina ni le carga gastos
   const gastosReales = (t.peajes ?? 0) + (t.estacionamientos ?? 0) + (t.otros_gastos ?? 0);
   const base = t.baseline_total;
   const cub = t.cubicaje;
@@ -93,8 +99,9 @@ async function detalle(ctx, root, id) {
   pintar(root, html`<div class="pagina-cab"><div><a href="#/rutas?tab=despachos" class="btn btn-texto btn-chico" style="margin-left:-6px">← Despachos</a><h2 style="font-size:22px;margin-top:4px">Despacho N° ${t.id} · ${fecha(t.fecha)} ${insigniaEstado(t.estado)}</h2>
     <p>${t.marca} ${t.modelo}${t.conductor ? ` · conductor ${t.conductor}` : ' · sin conductor'}${t.preparador ? ` · prepara ${t.preparador}` : ''}${t.hora_salida ? ` · sale ${t.hora_salida}` : ''}${t.alternativa && t.alternativa !== 'manual' ? ` · ruta ${t.alternativa}` : ' · orden de selección'} <button class="btn btn-texto btn-chico" data-personal>Cambiar personal</button></p></div>
     <div class="acciones">
-      ${t.estado === 'planificado' ? html`<button class="btn" data-estado="en_ruta">Iniciar ruta</button>` : ''}${abierto ? html`<button class="btn btn-primario" data-completar>Cerrar despacho</button><button class="btn" data-gastos>Registrar gastos reales</button><button class="btn btn-peligro" data-cancelar>Cancelar despacho</button>` : ''}
-      ${t.estado !== 'completado' ? html`<button class="btn btn-peligro" data-borrar>Eliminar</button>` : ''}</div></div>
+      ${t.estado === 'planificado' ? html`<button class="btn" data-estado="en_ruta">Iniciar ruta</button>` : ''}${abierto ? html`<button class="btn btn-primario" data-completar>Cerrar despacho</button>` : ''}
+      ${abierto && !bodega ? html`<button class="btn" data-gastos>Registrar gastos reales</button><button class="btn btn-peligro" data-cancelar>Cancelar despacho</button>` : ''}
+      ${t.estado !== 'completado' && !bodega ? html`<button class="btn btn-peligro" data-borrar>Eliminar</button>` : ''}</div></div>
     <dl class="kpis kpis-3" style="margin-bottom:16px">${kpi('Costo total', clp(t.costo_total), { detalle: `Combustible ${clp(t.costo_combustible)} · desgaste ${clp(t.costo_desgaste)} · otros ${clp(t.costo_otros)}` })}${kpi('Distancia', num1(t.distancia_km), { unidad: 'km', detalle: t.retorna_base ? 'Incluye el regreso a la base' : 'Sin regreso a la base' })}
       ${kpi('Tiempo total', duracion(t.tiempo_min))}${kpi('Costo por km', clp(t.costo_km))}${kpi('Costo por cliente', clp(t.costo_cliente), { detalle: pluralizar(t.n_paradas, 'parada', 'paradas') })}
       ${kpi('Carga', cub?.calculable ? `${num0(cub.ocupacion_volumen_pct ?? 0)}%` : t.peso_kg != null ? num1(t.peso_kg) : null, { unidad: cub?.calculable ? 'del volumen' : t.peso_kg != null ? 'kg' : '', detalle: cub?.calculable ? `${cub.cabe ? 'Cabe en el vehículo' : 'No cabe en el vehículo'}${cub.peso_pct != null ? ` · ${num0(cub.peso_pct)}% del peso` : ''}` : cub?.faltan?.length ? `Cubicaje sin calcular: ${cub.faltan[0]}` : '', vacio: 'Sin pesos registrados' })}</dl>
