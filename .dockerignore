@@ -1,0 +1,13 @@
+.git
+node_modules
+dist
+data
+test
+navegador
+deploy
+*.db
+*.db-*
+respaldo*.json
+.env
+.env.*
+!.env.example

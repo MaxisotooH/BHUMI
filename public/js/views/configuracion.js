@@ -77,11 +77,14 @@ async function base(panel, ctx) {
 // ---------- Google Maps ----------
 async function google(panel, ctx) {
   const s = ctx.estado.settings;
+  const porServidor = !!ctx.estado.meta?.google_por_servidor;
   pintar(panel, html`<div class="grid g-main" style="align-items:start">
     <form class="card card-cuerpo" id="f">
       <h3 class="seccion-form">Conexión con Google Maps Platform</h3>
       <p class="muted" style="margin-top:0">Todo el mapa, las distancias, los tiempos y la ubicación de los clientes salen de Google. Sin la clave, esos datos quedan en blanco: el sistema no los inventa.</p>
-      ${campo('google_api_key', 'API key', s.google_api_key, { type: 'password', help: 'Se guarda solo en este navegador, dentro de los datos de BHUMI. El respaldo JSON no la incluye; el respaldo .db sí.', extra: 'autocomplete="off"' })}
+      ${porServidor
+        ? html`<div class="aviso"><p><b>Las claves de Google las administra el servidor.</b> Se definen en las variables <code>GOOGLE_SERVER_KEY</code> y <code>GOOGLE_BROWSER_KEY</code> y no se pueden ver ni cambiar desde aquí. Usa “Probar conexión” para revisar que respondan.</p></div>`
+        : campo('google_api_key', 'API key', s.google_api_key, { type: 'password', help: 'Se guarda solo en este navegador, dentro de los datos de BHUMI. El respaldo JSON no la incluye; el respaldo .db sí.', extra: 'autocomplete="off"' })}
       <div style="height:12px"></div>
       ${campo('google_map_id', 'ID de mapa (opcional)', s.google_map_id, { help: 'Si creaste un estilo de mapa en Google Cloud, pega aquí su ID. Si lo dejas vacío se usa el mapa estándar.' })}
       <div style="height:12px"></div>
@@ -89,7 +92,15 @@ async function google(panel, ctx) {
       <div class="fila" style="margin-top:16px"><button class="btn btn-primario" type="submit">Guardar</button><button class="btn" type="button" id="probar">Probar conexión</button></div>
       <div id="resultado-prueba" style="margin-top:14px"></div>
     </form>
-    <div class="card card-cuerpo"><h3 class="seccion-form">Cómo obtener la API key</h3>
+    ${porServidor ? html`<div class="card card-cuerpo"><h3 class="seccion-form">Claves en el servidor central</h3>
+      <p style="margin-top:0">En el servidor, BHUMI usa dos claves distintas para que la que consulta rutas nunca llegue al navegador:</p>
+      <ul style="padding-left:20px;margin:0">
+        <li><b>Clave del servidor</b> (<code>GOOGLE_SERVER_KEY</code>): restringida a la dirección IP del servidor, con <b>Geocoding API</b> y <b>Routes API</b>.</li>
+        <li><b>Clave del mapa</b> (<code>GOOGLE_BROWSER_KEY</code>): restringida al sitio web de BHUMI, con <b>Maps JavaScript API</b>.</li>
+      </ul>
+      <p class="muted" style="margin-top:12px">Para cambiarlas, edita el archivo <code>.env</code> del servidor y reinícialo. La guía completa está en <code>docs/DESPLIEGUE.md</code>.</p>
+      <p class="muted">BHUMI guarda en caché las distancias entre clientes para consultar a Google lo menos posible.</p>
+    </div>` : html`<div class="card card-cuerpo"><h3 class="seccion-form">Cómo obtener la API key</h3>
       <ol style="padding-left:20px;margin:0">
         <li>Entra a <b>console.cloud.google.com</b> y crea un proyecto.</li>
         <li>Activa la facturación del proyecto (Google entrega un crédito mensual; revisa los precios vigentes).</li>
@@ -100,7 +111,7 @@ async function google(panel, ctx) {
       </ol>
       <p class="muted" style="margin-top:12px">BHUMI guarda en caché las distancias entre clientes para consultar a Google lo menos posible.</p>
       <p class="muted">Por qué sin restricción de sitio web: BHUMI se abre desde un archivo de tu computador, no desde una dirección de internet, y Google no puede verificar el sitio de origen. Por eso la protección de la clave son las tres APIs permitidas y el presupuesto con alerta.</p>
-    </div></div>`);
+    </div>`}</div>`);
   const f = panel.querySelector('#f');
   const datos = () => { const d = leerForm(f); return { ...d, usar_trafico: d.usar_trafico ? '1' : '0' }; };
   f.addEventListener('submit', async (e) => { e.preventDefault(); try { await guardarAjustes(ctx, datos()); } catch (er) { falla(er); } });
@@ -109,7 +120,7 @@ async function google(panel, ctx) {
     e.target.disabled = true;
     pintar(out, html`<span class="spinner"></span> Consultando a Google…`);
     try {
-      await guardarAjustes(ctx, datos(), 'API key guardada');
+      await guardarAjustes(ctx, datos(), porServidor ? 'Ajustes guardados' : 'API key guardada');
       const r = await post('/settings/probar-google');
       const fila = (n, x, ok) => html`<li style="display:flex;gap:10px;margin:6px 0"><span class="marca-estado ${x.ok ? 'ok' : 'falta'}" style="width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-weight:700;flex:none;${x.ok ? 'background:#1F7A4D;color:#fff' : 'background:#F2A900;color:#2b1d00'}">${x.ok ? '✓' : '!'}</span><div><b>${n}</b><div class="muted" style="font-size:13px">${x.ok ? ok : x.error}</div></div></li>`;
       pintar(out, html`<ul style="list-style:none;padding:0;margin:0">${fila('Geocoding API', r.geocoding, `Encontró: ${r.geocoding.direccion}`)}${fila('Routes API', r.routes, 'Calculó una ruta de prueba correctamente.')}</ul>

@@ -1,0 +1,63 @@
+# BHUMI · servidor central
+#   docker compose up -d --build                     BHUMI + HTTPS (Caddy)
+#   docker compose --profile respaldo up -d --build  además, respaldo continuo con Litestream
+# Las variables se leen de .env (copia .env.example). Detalle en docs/DESPLIEGUE.md.
+
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      HOST: 0.0.0.0
+      PORT: 3000
+      DB_FILE: /datos/bhumi.db
+      TRUST_PROXY: "1"
+      GOOGLE_SERVER_KEY: ${GOOGLE_SERVER_KEY:-}
+      GOOGLE_BROWSER_KEY: ${GOOGLE_BROWSER_KEY:-}
+    volumes:
+      - datos:/datos
+    expose:
+      - "3000"
+
+  caddy:
+    image: caddy:2.8.4-alpine
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    environment:
+      DOMINIO: ${DOMINIO:?Define DOMINIO en .env (ej. bhumi.tuempresa.cl)}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+  litestream:
+    image: litestream/litestream:0.3.13
+    profiles: ["respaldo"]
+    restart: unless-stopped
+    # Mismo usuario que BHUMI (node, uid 1000): si Litestream crea los archivos -wal o -shm,
+    # la app los puede seguir escribiendo.
+    user: "1000:1000"
+    depends_on:
+      app:
+        condition: service_healthy
+    command: replicate
+    environment:
+      LITESTREAM_ACCESS_KEY_ID: ${LITESTREAM_ACCESS_KEY_ID:-}
+      LITESTREAM_SECRET_ACCESS_KEY: ${LITESTREAM_SECRET_ACCESS_KEY:-}
+      LITESTREAM_BUCKET: ${LITESTREAM_BUCKET:-}
+      LITESTREAM_ENDPOINT: ${LITESTREAM_ENDPOINT:-}
+      LITESTREAM_REGION: ${LITESTREAM_REGION:-auto}
+    volumes:
+      - datos:/datos
+      - ./deploy/litestream.yml:/etc/litestream.yml:ro
+
+volumes:
+  datos:
+  caddy_data:
+  caddy_config:

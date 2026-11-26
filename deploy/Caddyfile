@@ -1,0 +1,17 @@
+# HTTPS automático (Let's Encrypt) para el dominio de BHUMI.
+{$DOMINIO} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	reverse_proxy app:3000 {
+		# Entrega los eventos en tiempo real (Fase 3) sin esperar a llenar el búfer.
+		flush_interval -1
+	}
+}
